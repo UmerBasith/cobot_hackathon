@@ -1,0 +1,11 @@
+node_modules/
+.venv/
+dist/
+__pycache__/
+.pytest_cache/
+*.pyc
+**/backend/data/*.db
+**/logs/
+scratch-deck/
+.clock.json
+~$*

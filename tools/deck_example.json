@@ -1,0 +1,109 @@
+{
+  "meta": {
+    "team": "Ctrl.Alt.Elite",
+    "members": ["Umer Basith", "Muizzur Rahman"],
+    "event": "Cobot-Ex Hackathon 2026",
+    "theme": "dark",
+    "brand": "#7C5CFF",
+    "accent": "#22D3EE"
+  },
+  "slides": [
+    {
+      "type": "title",
+      "title": "NovaSense: predict failures before they happen",
+      "highlight": "before they happen",
+      "subtitle": "An AI co-pilot that watches every machine and tells the team exactly what to fix next.",
+      "tag": "Round 1 · Problem 3",
+      "notes": "Good morning judges. We are Ctrl.Alt.Elite. In the next 5 minutes we will show a working system, not just an idea."
+    },
+    {
+      "type": "statement",
+      "eyebrow": "The problem",
+      "text": "Unplanned downtime costs Indian factories up to 20% of their productive time.",
+      "highlight": "20%",
+      "sub": "Machines fail without warning. Teams find out only after production stops.",
+      "notes": "Start with the pain. Pause after the number."
+    },
+    {
+      "type": "cards",
+      "eyebrow": "Our solution",
+      "title": "One platform, three superpowers",
+      "highlight": "three superpowers",
+      "intro": "NovaSense turns raw sensor readings into early warnings and clear actions.",
+      "cards": [
+        { "icon": "🧠", "title": "Predict", "text": "A gradient-boosting model scores failure risk from temperature, vibration, load and run hours." },
+        { "icon": "⚡", "title": "Alert", "text": "High-risk machines raise instant, prioritised alerts with the main cause." },
+        { "icon": "💬", "title": "Explain", "text": "An AI assistant answers questions in plain English using live data." }
+      ]
+    },
+    {
+      "type": "flow",
+      "eyebrow": "Architecture",
+      "title": "From sensor to decision in under a second",
+      "steps": [
+        { "title": "Sensors / CSV", "text": "Readings arrive live or as an upload" },
+        { "title": "FastAPI backend", "text": "Validates input and stores history in SQLite" },
+        { "title": "ML model", "text": "Scores risk and explains the top factors" },
+        { "title": "React dashboard", "text": "Charts, alerts and the AI assistant" }
+      ]
+    },
+    {
+      "type": "image",
+      "eyebrow": "Live demo",
+      "title": "The dashboard the team actually uses",
+      "image": "example/dashboard.png",
+      "caption": "localhost:5173/app — running live",
+      "points": ["Live KPIs and 24-hour forecast", "Risk score with reasons", "Status mix at a glance", "Upload any CSV to analyse"]
+    },
+    {
+      "type": "stats",
+      "eyebrow": "Results",
+      "title": "Measured, not guessed",
+      "stats": [
+        { "value": "90%", "label": "Accuracy on 1,000 unseen rows" },
+        { "value": "0.96", "label": "ROC-AUC" },
+        { "value": "<1s", "label": "Time to score a machine" },
+        { "value": "6/6", "label": "Automated tests passing" }
+      ],
+      "note": "Model trained on a synthetic dataset modelled on real sensor ranges. Real plant data would be the next step."
+    },
+    {
+      "type": "compare",
+      "eyebrow": "Why it's better",
+      "title": "Before vs after NovaSense",
+      "left": { "title": "Today", "items": ["Fix after it breaks", "Paper logs", "Experts guess the cause", "Hours of downtime"] },
+      "right": { "title": "With NovaSense", "items": ["Warned hours earlier", "Live dashboard", "Top causes shown", "Planned, short stops"] }
+    },
+    {
+      "type": "table",
+      "eyebrow": "Comparison",
+      "title": "How we compare",
+      "columns": ["Feature", "Manual checks", "Basic alarms", "NovaSense"],
+      "rows": [
+        ["Predicts early", "No", "No", "Yes"],
+        ["Explains cause", "Sometimes", "No", "Yes"],
+        ["Plain-English assistant", "No", "No", "Yes"],
+        ["Cost to start", "High", "Medium", "Low"]
+      ],
+      "highlight_col": 3
+    },
+    {
+      "type": "timeline",
+      "eyebrow": "Roadmap",
+      "title": "What comes next",
+      "phases": [
+        { "title": "Today", "text": "Working prototype with model, dashboard and assistant" },
+        { "title": "Month 1", "text": "Pilot on one real production line" },
+        { "title": "Month 3", "text": "Edge device + live sensor stream" },
+        { "title": "Month 6", "text": "Multi-plant rollout and mobile alerts" }
+      ]
+    },
+    {
+      "type": "closing",
+      "title": "Thank you",
+      "highlight": "Thank you",
+      "sub": "NovaSense: from raw signals to the right action, in seconds.",
+      "contact": "Questions? We'd love to show you the live demo."
+    }
+  ]
+}

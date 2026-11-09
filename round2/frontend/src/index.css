@@ -1,0 +1,117 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Dark mode is switched by the "dark" class on <html> (see ThemeToggle). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------
+   BRAND: change ONE number to re-colour the whole site for a problem.
+   --brand-hue: 265 violet (default) | 230 blue | 195 cyan | 160 green
+                | 145 emerald | 85 amber | 30 orange | 15 red | 330 pink
+   ------------------------------------------------------------------ */
+:root {
+  --brand-hue: 265;
+  --accent-hue: 195;
+
+  --bg: oklch(0.985 0.003 var(--brand-hue));
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.965 0.006 var(--brand-hue));
+  --line: oklch(0.91 0.01 var(--brand-hue));
+  --fg: oklch(0.2 0.02 var(--brand-hue));
+  --muted: oklch(0.5 0.02 var(--brand-hue));
+  --ring: oklch(0.62 0.2 var(--brand-hue) / 0.45);
+}
+
+.dark {
+  --bg: oklch(0.16 0.015 var(--brand-hue));
+  --surface: oklch(0.2 0.018 var(--brand-hue));
+  --surface-2: oklch(0.245 0.02 var(--brand-hue));
+  --line: oklch(0.32 0.02 var(--brand-hue));
+  --fg: oklch(0.96 0.005 var(--brand-hue));
+  --muted: oklch(0.7 0.02 var(--brand-hue));
+  --ring: oklch(0.7 0.18 var(--brand-hue) / 0.5);
+}
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk Variable", "Inter Variable", ui-sans-serif, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+
+  --color-brand-50: oklch(0.97 0.02 var(--brand-hue));
+  --color-brand-100: oklch(0.94 0.045 var(--brand-hue));
+  --color-brand-200: oklch(0.88 0.08 var(--brand-hue));
+  --color-brand-300: oklch(0.8 0.12 var(--brand-hue));
+  --color-brand-400: oklch(0.71 0.17 var(--brand-hue));
+  --color-brand-500: oklch(0.62 0.2 var(--brand-hue));
+  --color-brand-600: oklch(0.55 0.21 var(--brand-hue));
+  --color-brand-700: oklch(0.47 0.19 var(--brand-hue));
+  --color-brand-800: oklch(0.38 0.15 var(--brand-hue));
+  --color-brand-900: oklch(0.3 0.11 var(--brand-hue));
+
+  --color-accent-400: oklch(0.8 0.13 var(--accent-hue));
+  --color-accent-500: oklch(0.72 0.14 var(--accent-hue));
+  --color-accent-600: oklch(0.62 0.13 var(--accent-hue));
+}
+
+@layer base {
+  html { scroll-behavior: smooth; }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+  ::selection { background: oklch(0.62 0.2 var(--brand-hue) / 0.25); }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+}
+
+@layer components {
+  /* Gradient text for one highlighted phrase in a headline. */
+  .text-gradient {
+    background: linear-gradient(100deg, var(--color-brand-500), var(--color-accent-500) 60%, var(--color-brand-400));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  /* Faint grid behind hero sections. */
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, color-mix(in oklch, var(--line) 70%, transparent) 1px, transparent 1px),
+      linear-gradient(to bottom, color-mix(in oklch, var(--line) 70%, transparent) 1px, transparent 1px);
+    background-size: 44px 44px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black 40%, transparent 100%);
+  }
+  .glass {
+    background: color-mix(in oklch, var(--surface) 72%, transparent);
+    backdrop-filter: blur(14px) saturate(1.4);
+  }
+  .shadow-soft { box-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 8px 24px -8px rgb(0 0 0 / 0.08); }
+  .shadow-glow { box-shadow: 0 10px 40px -10px oklch(0.62 0.2 var(--brand-hue) / 0.55); }
+}
+
+@keyframes blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -40px) scale(1.08); }
+  66% { transform: translate(-25px, 20px) scale(0.95); }
+}
+.animate-blob { animation: blob 16s ease-in-out infinite; }
+
+@keyframes shimmer { to { transform: translateX(100%); } }
+.skeleton { position: relative; overflow: hidden; background: var(--surface-2); }
+.skeleton::after {
+  content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--surface) 60%, transparent), transparent);
+  animation: shimmer 1.4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

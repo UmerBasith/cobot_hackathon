@@ -22,7 +22,9 @@ the problem, proven with numbers, plus a striking animated deck and a short repo
 Each round has a **different** problem. Each round ends with: **live demo + PPT presentation**.
 Deliverables per round (in `<round>/deliver/`):
 1. Working website (React + **Tailwind CSS**) + Python API, running on this laptop at http://localhost:5173
-2. **Animated deck, ~10 slides** (`.pptx` + `.pdf` backup) — `tools/make_deck.py`
+2. **Animated deck, ~10 slides** (`.pptx` + `.pdf` backup) — `tools/make_deck.py`. Light theme, 4-colour palette
+   read automatically from the website's colours (`"site": "../frontend"` in deck.json meta) so deck and app match.
+   20-45 automatic animations per slide + Morph transitions; one click = next slide (tested in PowerPoint).
 3. **Short report, max 10 pages** (`.docx` + `.pdf`) — `tools/make_doc.py`
 4. `DEMO_SCRIPT.md` — what to say and click, 3 minutes, plus likely judge questions with answers
 

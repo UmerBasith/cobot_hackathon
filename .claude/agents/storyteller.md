@@ -18,8 +18,14 @@ and `<round>/deliver/`. Judges remember stories and numbers — you make the tea
 - `<round>/deck/deck.json` — 10 slides: title → statement (problem + big number) → cards (solution) → flow
   (architecture) → image (live demo screenshot, path `shots/app.png`) → stats (results) → compare or table
   (why we're better) → cards or bullets (impact/feasibility) → timeline (roadmap) → closing.
-  meta: team "Ctrl.Alt.Elite", members ["Umer Basith", "Muizzur Rahman"], event "Cobot-Ex Hackathon 2026",
-  theme "dark", brand/accent hex matching the website's brand. Add `notes` (speaker script) to every slide.
+  meta: `{"team": "Ctrl.Alt.Elite", "members": ["Umer Basith", "Muizzur Rahman"], "event": "Cobot-Ex Hackathon 2026",
+  "theme": "light", "site": "../frontend"}` — **always `"site": "../frontend"`**: the builder reads the website's
+  `--brand-hue`/`--accent-hue` from `frontend/src/index.css` so the deck's 4-colour palette matches the website exactly.
+  Never set hex colours by hand. Add `notes` (speaker script) to every slide.
+  Use the richer options: statement slide with `"stat": {"value": "20%", "label": "..."}` (big number card),
+  image slide with `"url": "localhost:5173/app"` (shown in the browser-window frame), icons (emoji) on cards.
+  All animation (word-by-word titles, pop-in icons, pulsing numbers, morphing background, progress bar,
+  rotating rings on the title slide, confetti on the last slide) is automatic — just give good content.
 - `<round>/doc/report.md` — max ~1,800 words so it stays ≤ 10 pages with images. Sections:
   Executive summary · Problem statement · Proposed solution · Architecture (use `../deck/slides/slide04.png` after
   export, or a chart) · Implementation (tech stack table, key algorithm) · Results & validation (metrics table,

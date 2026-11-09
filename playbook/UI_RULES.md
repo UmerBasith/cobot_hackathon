@@ -6,6 +6,7 @@
 2. **Pick colour by domain** (`--brand-hue` / `--accent-hue`):
    health 185/150 · agriculture 150/95 · energy 75/30 · safety/security 15/265 · finance 160/230 ·
    education 250/195 · robotics/industry 265/195 (default) · environment 145/195 · city/transport 230/170.
+   The deck reads the same `--brand-hue`/`--accent-hue`, so set them BEFORE the storyteller builds the deck.
 3. Use kit components only. Spacing: cards `p-5`/`p-6`, grids `gap-4`/`gap-5`, page max width `max-w-6xl`/`max-w-7xl`.
 4. Every page has: a clear title (PageIntro), real-looking numbers, at least one chart or visual, one primary action.
 5. Every async action shows a state: loading (Button `loading`, Skeleton), success (toast), empty (EmptyState), error (toast).

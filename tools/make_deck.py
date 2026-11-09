@@ -319,13 +319,22 @@ class Deck:
             self.soft(b, r)
         rd = 3.4 + 0.6 * math.sin(k)
         rx, ry = (12.9 - 0.7 * math.cos(k * 0.9), 7.25 + 0.3 * math.sin(k * 1.3)) if k > 1 else (15.5, 9.5)
-        self.shape(s, MSO_SHAPE.OVAL, rx - rd / 2, ry - rd / 2, rd, rd, line=t.brand, line_w=1.25, line_alpha=28, name="!!ring")
+        ring = self.shape(s, MSO_SHAPE.OVAL, rx - rd / 2, ry - rd / 2, rd, rd, line=t.brand, line_w=1.25, line_alpha=28, name="!!ring")
         dots = s.shapes.add_group_shape()
         dots.name = "!!dots"
         dxo, dyo = (11.55, 0.42 + 0.12 * math.cos(k)) if k % 2 else (7.4 + 0.5 * math.sin(k), 0.42)
         for i in range(4):
             for j in range(3):
                 self.shape(dots, MSO_SHAPE.OVAL, dxo + i * 0.22, dyo + j * 0.22, 0.07, 0.07, fill=t.c(i + j), alpha=70)
+        # LIVE BACKGROUND: blobs drift, ring turns, dots float - endlessly, on every slide
+        # (turn off with "live_bg": false in meta). One click still moves to the next slide.
+        if self.meta.get("live_bg", True):
+            sgn = 1 if k % 2 else -1
+            anims += [(blobA.shape_id, "float_loop", 0, 7000, {"dx": 0.035 * sgn, "dy": 0.045}),
+                      (blobB.shape_id, "float_loop", 0, 8500, {"dx": -0.04 * sgn, "dy": -0.035}),
+                      (blobC.shape_id, "float_loop", 0, 6000, {"dx": 0.03, "dy": -0.03 * sgn}),
+                      (ring.shape_id, "spin_loop", 0, 45000),
+                      (dots.shape_id, "float_loop", 0, 5000, {"dx": 0.008 * sgn, "dy": 0.012})]
         # progress bar (grows slide by slide through Morph)
         self.shape(s, MSO_SHAPE.RECTANGLE, 0, H - 0.07, W, 0.07, fill=t.faint, name="!!track")
         prog = self.shape(s, MSO_SHAPE.RECTANGLE, 0, H - 0.07, max(0.2, W * k / self.total), 0.07, fill=t.brand, name="!!progress")

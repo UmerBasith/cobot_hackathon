@@ -1,145 +1,109 @@
-import { useEffect, useState } from "react";
-import { Activity, AlertTriangle, Database, FileSpreadsheet, Gauge, RefreshCw, Sparkles, Target } from "lucide-react";
-import { api, withFallback } from "@/lib/api";
-import { mockOverview, mockPredict, type AnalyzeOut, type Overview, type PredictIn, type PredictOut, type RecordRow } from "@/lib/mock";
-import {
-  AreaChartBox, Badge, Button, Card, CardBody, CardHeader, ChartLegend, DataTable, DonutChartBox, FileDrop,
-  ProgressBar, RingGauge, Skeleton, Slider, StatTile, statusColors, useToast, type Column,
-} from "@/ui";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertOctagon, ArrowRight, CheckCircle2, Clock, Inbox, LayoutGrid, Map as MapIcon, PieChart, Plus, RefreshCw, Siren } from "lucide-react";
+import { Badge, BarChartBox, Button, Card, CardBody, CardHeader, ChartLegend, DonutChartBox, EmptyState, Skeleton, StatTile } from "@/ui";
 import { PageIntro } from "@/sections/AppShell";
-import { STATIC } from "@/lib/static";
+import { CategoryIcon, SEV_HEX, SeverityBadge, StatusBadge } from "@/sections/IncidentUI";
+import { LazyMap } from "@/sections/LazyMap";
+import { getIncidents, getStats, timeAgo } from "@/lib/resq";
+import { usePoll } from "@/lib/usePoll";
+import { fmtTime } from "@/lib/format";
+import { cn } from "@/lib/cn";
+import type { Incident, Severity, Stats } from "@/lib/mock";
 
-const statusTone = { Healthy: "green", Watch: "amber", Critical: "red" } as const;
-
-const columns: Column<RecordRow>[] = [
-  { key: "id", label: "ID", render: (r) => <span className="font-mono text-xs text-muted">{r.id}</span> },
-  { key: "name", label: "Name", render: (r) => <span className="font-medium">{r.name}</span> },
-  { key: "category", label: "Category" },
-  { key: "score", label: "Risk", align: "right", render: (r) => (
-    <div className="flex items-center justify-end gap-2"><ProgressBar value={r.score} tone={r.score > 66 ? "red" : r.score > 33 ? "amber" : "green"} className="w-20" />{r.score}</div>
-  ) },
-  { key: "status", label: "Status", render: (r) => <Badge tone={statusTone[r.status]} dot>{r.status}</Badge> },
-  { key: "updated", label: "Updated", render: (r) => <span className="text-muted">{r.updated}</span> },
-];
+const SEV_ORDER: Severity[] = ["Critical", "High", "Medium", "Low"];
 
 export default function Dashboard() {
-  const toast = useToast();
-  const [data, setData] = useState<Overview | null>(null);
-  const [input, setInput] = useState<PredictIn>({ temperature: 72, vibration: 4.2, load: 65, hours: 3200 });
-  const [result, setResult] = useState<PredictOut | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [file, setFile] = useState<File | null>(null);
-  const [analysis, setAnalysis] = useState<AnalyzeOut | null>(null);
+  const nav = useNavigate();
+  const [stats, reloadStats, at] = usePoll<Stats>(getStats);
+  const [list, reloadList] = usePoll<Incident[]>(() => getIncidents());
+  const reload = () => { reloadStats(); reloadList(); };
 
-  const load = () => withFallback(api.get<Overview>("/overview"), mockOverview).then(setData);
-  useEffect(() => { load(); if (STATIC) predict(); }, []); // screenshot mode shows a filled result
-
-  async function predict() {
-    setBusy(true);
-    const r = await withFallback(api.post<PredictOut>("/predict", input), mockPredict(input));
-    setResult(r); setBusy(false);
-    toast(r.label === "High" ? "warning" : "success", `Risk: ${r.label} (${r.score}/100)`, r.recommendation);
-  }
-
-  async function analyze(f: File | null) {
-    setFile(f); setAnalysis(null);
-    if (!f) return;
-    try { setAnalysis(await api.upload<AnalyzeOut>("/analyze", f)); toast("success", "File analysed", f.name); }
-    catch (e) { toast("error", "Could not analyse file", String(e).slice(0, 80)); }
-  }
+  const open = (list ?? []).filter((i) => i.status !== "Resolved");
+  const attention = open.filter((i) => i.severity === "Critical" || i.severity === "High").slice(0, 6);
+  const points = (list ?? []).filter((i) => i.lat != null && i.lng != null)
+    .map((i) => ({ id: i.id, lat: i.lat!, lng: i.lng!, severity: i.severity, title: i.title, resolved: i.status === "Resolved" }));
+  const sevData = SEV_ORDER.map((s) => ({ name: s, value: stats?.by_severity.find((x) => x.severity === s)?.count ?? 0 }));
+  const catData = (stats?.by_category ?? []).map((c) => ({ label: c.label.replace(" Emergency", "").replace(" Hazard", ""), Incidents: c.count }));
 
   return (
     <>
-      <PageIntro title="Overview" text="Live status, predictions and analysis in one place."
-        actions={<Button variant="outline" icon={RefreshCw} onClick={() => { setData(null); load(); }}>Refresh</Button>} />
+      <PageIntro title="Control room" text={`Chennai · live incident picture${at ? ` · updated ${fmtTime(at)}` : ""}`}
+        actions={<>
+          <Button variant="outline" icon={RefreshCw} onClick={reload}>Refresh</Button>
+          <Link to="/app/report"><Button icon={Plus}>New report</Button></Link>
+        </>} />
 
-      {/* KPI row */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {data ? (<>
-          <StatTile label="Items monitored" value={data.kpis.total} icon={Database} delta={8.2} spark={data.series.map((s) => s.actual).slice(-12)} />
-          <StatTile label="Average risk" value={data.kpis.risk_avg} decimals={1} icon={Gauge} delta={-4.1} />
-          <StatTile label="Open alerts" value={data.kpis.alerts} icon={AlertTriangle} delta={-12} />
-          <StatTile label="Model accuracy" value={data.kpis.accuracy} decimals={1} suffix="%" icon={Target} delta={1.3} />
-        </>) : Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)}
+        {stats ? (<>
+          <StatTile label="Total reported incidents" value={stats.total} icon={Inbox} />
+          <StatTile label="Critical (open)" value={stats.critical} icon={AlertOctagon}
+            className={cn(stats.critical > 0 && "border-red-300 bg-red-50/70 ring-1 ring-red-200 dark:border-red-900 dark:bg-red-950/40 dark:ring-red-900 [&_.font-display]:text-red-600 dark:[&_.font-display]:text-red-400")} />
+          <StatTile label="Pending (awaiting action)" value={stats.pending} icon={Clock}
+            className="[&_.font-display]:text-amber-600 dark:[&_.font-display]:text-amber-400" />
+          <StatTile label="Resolved" value={stats.resolved} icon={CheckCircle2}
+            className="[&_.font-display]:text-emerald-600 dark:[&_.font-display]:text-emerald-400" />
+        </>) : Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
       </div>
 
-      {/* Charts */}
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <CardHeader title="Actual vs predicted" subtitle="Last 24 hours" icon={Activity} action={<Badge tone="brand">AI forecast</Badge>} />
-          <CardBody>{data ? <AreaChartBox data={data.series as unknown as Record<string, unknown>[]} x="t" series={[{ key: "actual", label: "Actual" }, { key: "predicted", label: "Predicted" }]} /> : <Skeleton className="h-[280px]" />}</CardBody>
+          <CardHeader title="Live incident map" subtitle="Colour = severity · click a dot to open" icon={MapIcon}
+            action={<div className="hidden gap-3 text-xs text-muted sm:flex">{SEV_ORDER.map((s) => <span key={s} className="flex items-center gap-1"><span className="size-2.5 rounded-full" style={{ background: SEV_HEX[s] }} />{s}</span>)}</div>} />
+          <CardBody><LazyMap height={420} points={points} onSelect={(id) => nav(`/app/incidents/${id}`)} /></CardBody>
         </Card>
-        <Card>
-          <CardHeader title="Status breakdown" subtitle="Share of items" />
-          <CardBody>
-            {data ? (<>
-              <DonutChartBox colors={statusColors} data={data.breakdown as unknown as Record<string, unknown>[]} center={{ value: String(data.kpis.total), label: "items" }} />
-              <div className="mt-4"><ChartLegend colors={statusColors} items={data.breakdown.map((b) => ({ label: b.name, value: `${b.value}%` }))} /></div>
-            </>) : <Skeleton className="h-[300px]" />}
-          </CardBody>
-        </Card>
-      </div>
-
-      {/* Prediction */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Run a prediction" subtitle="Move the sliders, then predict" icon={Sparkles} />
-          <CardBody className="space-y-5">
-            <Slider label="Temperature" unit=" °C" min={20} max={120} value={input.temperature} onChange={(v) => setInput({ ...input, temperature: v })} />
-            <Slider label="Vibration" unit=" mm/s" min={0} max={10} step={0.1} value={input.vibration} onChange={(v) => setInput({ ...input, vibration: v })} />
-            <Slider label="Load" unit=" %" min={0} max={100} value={input.load} onChange={(v) => setInput({ ...input, load: v })} />
-            <Slider label="Run hours" unit=" h" min={0} max={8000} step={100} value={input.hours} onChange={(v) => setInput({ ...input, hours: v })} />
-            <Button className="w-full" size="lg" icon={Sparkles} loading={busy} onClick={predict}>Predict risk</Button>
-          </CardBody>
-        </Card>
-        <Card>
-          <CardHeader title="Result" subtitle="Score, confidence and why" icon={Gauge} />
-          <CardBody>
-            {result ? (
-              <div className="flex flex-col items-center gap-6 xl:flex-row xl:items-start">
-                <RingGauge value={result.score} label={`${result.label} risk`} danger size={160} />
-                <div className="w-full flex-1 space-y-3">
-                  <p className="text-sm text-muted">Confidence <span className="font-medium text-fg">{Math.round(result.confidence * 100)}%</span></p>
-                  {result.factors.map((f) => (
-                    <div key={f.name}>
-                      <div className="mb-1 flex justify-between text-sm"><span>{f.name}</span><span className="text-muted">{f.impact}</span></div>
-                      <ProgressBar value={Math.min(100, f.impact)} />
-                    </div>
-                  ))}
-                  <div className="rounded-xl bg-brand-50 p-3 text-sm text-brand-800 dark:bg-brand-900/30 dark:text-brand-200"><b>Next step:</b> {result.recommendation}</div>
+        <Card className="flex flex-col">
+          <CardHeader title="Needs attention" subtitle="Open Critical & High, highest first" icon={Siren}
+            action={<Badge tone="red" dot pulse>{attention.length}</Badge>} />
+          <CardBody className="flex-1 space-y-2">
+            {!list && Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
+            {list && attention.length === 0 && <EmptyState icon={CheckCircle2} title="All clear" text="No open Critical or High incidents." />}
+            {attention.map((i) => (
+              <Link key={i.id} to={`/app/incidents/${i.id}`}
+                className={cn("flex items-center gap-3 rounded-xl border p-3 transition hover:-translate-y-0.5 hover:shadow-soft",
+                  i.severity === "Critical" ? "row-critical border-red-200 bg-red-50/60 dark:border-red-900 dark:bg-red-950/30" : "border-line bg-surface")}>
+                <CategoryIcon category={i.category} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{i.title}</p>
+                  <p className="truncate text-xs text-muted">{i.id} · {i.area} · {timeAgo(i.created_at)}</p>
                 </div>
-              </div>
-            ) : (
-              <div className="grid h-full min-h-64 place-items-center text-center text-sm text-muted"><p>Set the inputs and press <b className="text-fg">Predict risk</b>.</p></div>
-            )}
+                <SeverityBadge severity={i.severity} score={i.score} />
+              </Link>
+            ))}
+            {list && <Link to="/app/incidents" className="flex items-center justify-center gap-1 pt-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">View all incidents <ArrowRight className="size-4" /></Link>}
           </CardBody>
         </Card>
       </div>
 
-      {/* Table + upload */}
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <CardHeader title="Live records" subtitle="Click a column to sort" icon={Database} />
-          <CardBody>{data ? <DataTable columns={columns} rows={data.records} maxHeight={360} /> : <Skeleton className="h-60" />}</CardBody>
+          <CardHeader title="Incidents by category" subtitle="All reports, all statuses" icon={LayoutGrid} />
+          <CardBody>{stats ? <BarChartBox data={catData} x="label" series={[{ key: "Incidents", color: "var(--color-brand-500)" }]} height={280} /> : <Skeleton className="h-[280px]" />}</CardBody>
         </Card>
         <Card>
-          <CardHeader title="Analyse your data" subtitle="Upload a CSV" icon={FileSpreadsheet} />
-          <CardBody className="space-y-4">
-            <FileDrop file={file} onFile={analyze} accept=".csv" hint="CSV up to 10 MB" />
-            {analysis && (
-              <div className="space-y-2 text-sm">
-                <p><b>{analysis.rows}</b> rows · <b>{analysis.columns.length}</b> columns</p>
-                {analysis.summary.slice(0, 5).map((s) => (
-                  <div key={s.column} className="flex justify-between rounded-lg bg-surface-2 px-3 py-2">
-                    <span className="truncate font-medium">{s.column}</span>
-                    <span className="text-muted">{s.mean !== null ? `avg ${s.mean.toFixed(2)}` : "text"}{s.missing ? ` · ${s.missing} missing` : ""}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+          <CardHeader title="By severity" subtitle="Share of all reports" icon={PieChart} />
+          <CardBody>
+            {stats ? (<>
+              <DonutChartBox data={sevData} colors={SEV_ORDER.map((s) => SEV_HEX[s])} center={{ value: String(stats.total), label: "incidents" }} height={210} />
+              <div className="mt-3"><ChartLegend colors={SEV_ORDER.map((s) => SEV_HEX[s])} items={sevData.map((d) => ({ label: d.name, value: String(d.value) }))} /></div>
+            </>) : <Skeleton className="h-[280px]" />}
           </CardBody>
         </Card>
       </div>
+
+      <Card className="mt-4">
+        <CardHeader title="Latest reports" subtitle="Most recent first" icon={Inbox} />
+        <CardBody className="space-y-1">
+          {[...(list ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5).map((i) => (
+            <Link key={i.id} to={`/app/incidents/${i.id}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-surface-2">
+              <CategoryIcon category={i.category} className="size-8" />
+              <span className="w-20 shrink-0 font-mono text-xs text-muted">{i.id}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">{i.title}</span>
+              <span className="hidden text-xs text-muted sm:block">{timeAgo(i.created_at)}</span>
+              <StatusBadge status={i.status} />
+            </Link>
+          ))}
+        </CardBody>
+      </Card>
     </>
   );
 }

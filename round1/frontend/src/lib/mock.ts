@@ -335,3 +335,160 @@ export function mockAnalytics(): Analytics {
     team_performance: mockTeams.slice(0, 6).map((t, k) => ({ team_id: t.id, team_name: t.name, type_label: t.type_label, jobs: [3, 2, 2, 1, 1, 0][k], completed: [2, 2, 1, 1, 0, 0][k], rejected: k === 3 ? 1 : 0, avg_eta_min: k < 5 ? [8.4, 12.1, 6.3, 15.0, 9.8][k] : null })),
   };
 }
+
+/* ============ §12 INNOVATION: Golden Hour Engine + CPR Hero Network ============
+ * Survival = 95 % × 0.5^(minutes waiting ÷ half-life). Simplified DEMO model — the
+ * mock below uses the same formula as the backend (app/golden.py) so the fallback
+ * numbers stay consistent if the API is down. */
+export type SurvivalProfile = "cardiac" | "fire_trapped" | "drowning" | "toxic" | "trauma" | "debris" | "serious" | "minor";
+export interface GHRow {
+  incident_id: string; title: string; category: Category; area: string; severity: Severity; status: Status;
+  profile: SurvivalProfile; profile_label: string; basis: string; half_life_min: number; people_at_risk: number;
+  minutes_since_report: number; help_eta_min: number | null; help: string; cpr_started: boolean;
+  /** 0-1 */ survival_now: number; survival_at_help: number; survival_if_5_min_later: number;
+  expected_survivors: number; lives_lost_per_min_delay: number;
+}
+export interface GHStep {
+  incident_id: string; title: string; profile_label: string; people_at_risk: number;
+  team_id: string; team_name: string; eta_min: number; lives_gained: number; nearest_first_team: string | null;
+}
+export interface GHPlan {
+  steps: GHStep[]; expected_survivors_golden: number; expected_survivors_nearest: number;
+  extra_lives: number; people_waiting: number; teams_free: number;
+}
+export interface GoldenHour {
+  people_at_risk: number; expected_survivors: number; lives_lost_per_min_delay: number; method: string;
+  incidents: GHRow[]; plan: GHPlan;
+}
+export interface GHApplyOut { assigned: number; steps: GHStep[]; extra_lives: number }
+export interface GHSimulation {
+  runs: number; incidents_per_run: number; teams: number; people_at_risk_avg: number;
+  golden_hour_survivors: number; nearest_first_survivors: number; extra_lives_per_disaster: number;
+  improvement_pct: number; method: string;
+}
+/** All survival values 0-100. */
+export interface SurvivalPoint { t: number; no_help: number; with_cpr: number; current_plan: number }
+export interface SurvivalOut {
+  incident_id?: string; profile: SurvivalProfile | null; profile_label: string; basis: string;
+  half_life_min?: number; cpr_slowdown?: number; people_at_risk: number;
+  now_min?: number; help_min?: number | null; help?: string; cpr_min?: number | null;
+  survival_now?: number; points: SurvivalPoint[];
+}
+export type HeroStatus = "alerted" | "accepted" | "declined" | "arrived" | "cpr" | "done";
+export interface HeroVolunteer {
+  id: string; name: string; skills: string[]; status: HeroStatus; distance_m: number; eta_min: number;
+  alerted_at: string; updated_at: string; cpr_at: string | null;
+}
+export interface NearbyHero { id: string; name: string; skills: string[]; distance_m: number; eta_min: number; status: HeroStatus | "not alerted" }
+export interface IncidentHeroes { needs_heroes: boolean; radius_m: number; responding: HeroVolunteer[]; nearby: NearbyHero[] }
+
+export const SURVIVAL_PROFILES: Record<SurvivalProfile, { label: string; half: number; slow: number; basis: string }> = {
+  cardiac: { label: "Cardiac arrest / not breathing", half: 7, slow: 3, basis: "Survival falls about 10 % per minute without CPR; CPR slows the fall." },
+  fire_trapped: { label: "Trapped in fire / smoke", half: 12, slow: 1.5, basis: "Smoke and heat kill within minutes." },
+  drowning: { label: "Trapped in rising water", half: 25, slow: 1.5, basis: "Rising water: minutes to an hour." },
+  toxic: { label: "Gas / electric shock exposure", half: 20, slow: 2, basis: "Toxic gas or electric shock: minutes." },
+  trauma: { label: "Major trauma (golden hour)", half: 60, slow: 2, basis: "Major injuries: the first hour decides survival." },
+  debris: { label: "Trapped under debris", half: 600, slow: 1.5, basis: "Trapped under debris: survival over hours to days." },
+  serious: { label: "Serious injury", half: 120, slow: 2, basis: "Serious but stable injuries: hours." },
+  minor: { label: "Minor injury", half: 2880, slow: 1, basis: "Minor injuries: no real time pressure." },
+};
+
+/** Survival (0-1) at minute t; CPR from cprAt slows the decline by `slow`; a team on scene (helpAt) stops it. */
+export function survivalAt(t: number, half: number, cprAt: number | null = null, slow = 1, helpAt: number | null = null) {
+  const end = helpAt != null ? Math.min(t, helpAt) : t;
+  if (cprAt == null || end <= cprAt) return 0.95 * 0.5 ** (Math.max(0, end) / half);
+  return 0.95 * 0.5 ** (Math.max(0, cprAt) / half) * 0.5 ** ((end - cprAt) / (half * slow));
+}
+
+type GHSeed = [id: string, title: string, category: Category, area: string, severity: Severity, status: Status,
+  profile: SurvivalProfile, people: number, since: number, helpEta: number | null, help: string, cprAt: number | null];
+const GH_SEEDS: GHSeed[] = [
+  ["INC-1013", "Man collapsed, not breathing", "medical", "T. Nagar", "Critical", "Reported", "cardiac", 1, 4, null, "No team assigned · 3 CPR heroes alerted", 3],
+  ["INC-1008", "Bus overturned on GST Road", "road_accident", "Chromepet", "Critical", "Pending", "trauma", 12, 19.5, null, "No team assigned", null],
+  ["INC-1011", "Smoke in apartment stairwell, 2 trapped", "fire", "Anna Nagar", "Critical", "In Progress", "fire_trapped", 2, 6, 5, "Fire Engine · Anna Nagar, ETA 5 min", null],
+  ["INC-1012", "Family stranded on rooftop, water rising", "flood", "Velachery", "Critical", "Reported", "drowning", 5, 7.5, null, "No team assigned", null],
+  ["INC-1006", "Elderly woman with chest pain", "medical", "Mylapore", "Medium", "Reported", "serious", 1, 32.5, null, "No team assigned", null],
+  ["INC-1004", "Wall collapse after heavy rain", "building_collapse", "Royapuram", "Medium", "Pending", "debris", 2, 41.5, null, "No team assigned", null],
+  ["INC-1009", "Bike skid on wet road", "road_accident", "Guindy", "Medium", "Reported", "minor", 1, 15.5, null, "No team assigned", null],
+];
+const r2 = (n: number, d = 3) => Math.round(n * 10 ** d) / 10 ** d;
+function ghRow(s: GHSeed): GHRow {
+  const [incident_id, title, category, area, severity, status, profile, n, since, eta, help, cprAt] = s;
+  const p = SURVIVAL_PROFILES[profile];
+  const planned = eta != null ? since + eta : since + 90;
+  const slow = cprAt != null ? p.slow : 1;
+  const at = (t: number) => survivalAt(t, p.half, cprAt, slow);
+  return {
+    incident_id, title, category, area, severity, status, profile, profile_label: p.label, basis: p.basis, half_life_min: p.half,
+    people_at_risk: n, minutes_since_report: since, help_eta_min: eta, help, cpr_started: cprAt != null,
+    survival_now: r2(at(since)), survival_at_help: r2(at(planned)), survival_if_5_min_later: r2(at(planned + 5)),
+    expected_survivors: r2(n * at(planned), 2), lives_lost_per_min_delay: r2(n * (at(planned) - at(planned + 1))),
+  };
+}
+const ghRows = GH_SEEDS.map(ghRow).sort((a, b) => b.lives_lost_per_min_delay - a.lives_lost_per_min_delay);
+
+export const mockGoldenHour: GoldenHour = {
+  people_at_risk: ghRows.reduce((a, r) => a + r.people_at_risk, 0),
+  expected_survivors: r2(ghRows.reduce((a, r) => a + r.expected_survivors, 0), 2),
+  lives_lost_per_min_delay: r2(ghRows.reduce((a, r) => a + r.lives_lost_per_min_delay, 0)),
+  method: "Survival = 95 % x 0.5^(minutes waiting / half-life). Half-life depends on the condition; CPR or first aid slows the fall; it stops when a team is on scene. Simplified demo assumptions.",
+  incidents: ghRows,
+  plan: {
+    steps: [
+      { incident_id: "INC-1013", title: "Man collapsed, not breathing", profile_label: "Cardiac arrest / not breathing", people_at_risk: 1, team_id: "ALS-TNR", team_name: "ALS Ambulance · T. Nagar", eta_min: 6.2, lives_gained: 0.71, nearest_first_team: "BLS Ambulance · Adyar" },
+      { incident_id: "INC-1008", title: "Bus overturned on GST Road", profile_label: "Major trauma (golden hour)", people_at_risk: 12, team_id: "ALS-VLC", team_name: "ALS Ambulance · Velachery", eta_min: 23.2, lives_gained: 3.74, nearest_first_team: "ALS Ambulance · Velachery" },
+      { incident_id: "INC-1012", title: "Family stranded on rooftop, water rising", profile_label: "Trapped in rising water", people_at_risk: 5, team_id: "BOAT-VLC", team_name: "Rescue Boat · Velachery", eta_min: 3.4, lives_gained: 3.19, nearest_first_team: "Rescue Boat · Velachery" },
+      { incident_id: "INC-1006", title: "Elderly woman with chest pain", profile_label: "Serious injury", people_at_risk: 1, team_id: "BLS-ADY", team_name: "BLS Ambulance · Adyar", eta_min: 11.8, lives_gained: 0.27, nearest_first_team: "ALS Ambulance · T. Nagar" },
+    ],
+    expected_survivors_golden: 17.42, expected_survivors_nearest: 16.36, extra_lives: 1.06, people_waiting: 21, teams_free: 10,
+  },
+};
+
+export const mockGHSimulation: GHSimulation = {
+  runs: 40, incidents_per_run: 25, teams: 13, people_at_risk_avg: 65.8,
+  golden_hour_survivors: 34.83, nearest_first_survivors: 26.59, extra_lives_per_disaster: 8.24, improvement_pct: 31,
+  method: "40 simulated disaster bursts (seed 7), 25 life-risk incidents each, 13 teams, one dispatch wave; unserved incidents wait 90 min. Survival curves are simplified demo assumptions.",
+};
+
+export function mockSurvival(id: string): SurvivalOut {
+  const row = ghRows.find((r) => r.incident_id === id);
+  if (!row) return { incident_id: id, profile: null, profile_label: "No one at risk to life", basis: "No injuries or life threat reported.", people_at_risk: 0, points: [] };
+  const p = SURVIVAL_PROFILES[row.profile];
+  const seed = GH_SEEDS.find((s) => s[0] === id)!;
+  const cpr = seed[11];
+  const now = row.minutes_since_report;
+  const helpMin = row.help_eta_min != null ? now + row.help_eta_min : null;
+  const horizon = Math.max(60, Math.min(p.half * 3, 240), (helpMin ?? 0) + 15, now + 15);
+  const points: SurvivalPoint[] = Array.from({ length: 33 }, (_, k) => {
+    const t = (horizon * k) / 32;
+    return {
+      t: Math.round(t * 10) / 10,
+      no_help: Math.round(1000 * survivalAt(t, p.half)) / 10,
+      with_cpr: Math.round(1000 * survivalAt(t, p.half, cpr ?? now, p.slow)) / 10,
+      current_plan: Math.round(1000 * survivalAt(t, p.half, cpr, cpr != null ? p.slow : 1, helpMin)) / 10,
+    };
+  });
+  return {
+    incident_id: id, profile: row.profile, profile_label: p.label, basis: p.basis, half_life_min: p.half, cpr_slowdown: p.slow,
+    people_at_risk: row.people_at_risk, now_min: now, help_min: helpMin, help: row.help, cpr_min: cpr,
+    survival_now: Math.round(row.survival_now * 1000) / 10, points,
+  };
+}
+
+const heroAgo = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+export function mockIncidentHeroes(id: string): IncidentHeroes {
+  const life = ghRows.some((r) => r.incident_id === id && ["cardiac", "fire_trapped", "drowning", "toxic", "trauma"].includes(r.profile));
+  const responding: HeroVolunteer[] = id === "INC-1013" ? [
+    { id: "HERO-01", name: "Priya S", skills: ["CPR", "First aid", "Nurse"], status: "cpr", distance_m: 320, eta_min: 2.4, alerted_at: heroAgo(3), updated_at: heroAgo(1), cpr_at: heroAgo(1) },
+    { id: "HERO-04", name: "Deepa R", skills: ["CPR", "AED"], status: "accepted", distance_m: 610, eta_min: 3.8, alerted_at: heroAgo(3), updated_at: heroAgo(2), cpr_at: null },
+    { id: "HERO-07", name: "Anitha G", skills: ["CPR", "First aid"], status: "alerted", distance_m: 880, eta_min: 4.9, alerted_at: heroAgo(3), updated_at: heroAgo(3), cpr_at: null },
+  ] : [];
+  const nearby: NearbyHero[] = [
+    { id: "HERO-01", name: "Priya S", skills: ["CPR", "First aid", "Nurse"], distance_m: 320, eta_min: 2.4, status: "not alerted" },
+    { id: "HERO-04", name: "Deepa R", skills: ["CPR", "AED"], distance_m: 610, eta_min: 3.8, status: "not alerted" },
+    { id: "HERO-07", name: "Anitha G", skills: ["CPR", "First aid"], distance_m: 880, eta_min: 4.9, status: "not alerted" },
+    { id: "HERO-02", name: "Arjun K", skills: ["CPR", "First aid", "Swimmer"], distance_m: 1240, eta_min: 6.6, status: "not alerted" },
+    { id: "HERO-12", name: "Suresh B", skills: ["CPR", "Swimmer"], distance_m: 2150, eta_min: 10.2, status: "not alerted" },
+  ].map((n) => ({ ...n, status: responding.find((r) => r.id === n.id)?.status ?? "not alerted" }) as NearbyHero);
+  return { needs_heroes: life, radius_m: 3000, responding, nearby };
+}

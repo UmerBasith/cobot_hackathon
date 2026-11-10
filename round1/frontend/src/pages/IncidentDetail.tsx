@@ -200,13 +200,15 @@ export default function IncidentDetail() {
         </div>
       </div>
 
-      <Tabs<Tab> className="mb-4 max-w-full overflow-x-auto" value={tab} onChange={setTab} tabs={[
+      <div className="mb-4 w-[calc(100vw-2.5rem)] overflow-x-auto lg:w-full">
+      <Tabs<Tab> className="w-max" value={tab} onChange={setTab} tabs={[
         { value: "overview", label: "Overview", icon: Gauge }, { value: "assignment", label: "Assignment", icon: Truck },
         { value: "communication", label: "Communication", icon: MessageSquare }, { value: "audit", label: "Audit History", icon: History },
       ]} />
+      </div>
 
       {tab === "overview" && (
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 [&>*]:min-w-0">
           {/* Map */}
           <Card className="overflow-hidden rounded-2xl xl:col-span-2">
             <div className="relative">
@@ -359,7 +361,7 @@ export default function IncidentDetail() {
       )}
 
       {tab === "communication" && (
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 [&>*]:min-w-0">
           <Card className="rounded-2xl xl:col-span-2">
             <CardHeader title="Communication" subtitle="Every update, timestamped" icon={MessageSquare} />
             <CardBody>{timelineList(tl)}</CardBody>
@@ -378,7 +380,7 @@ export default function IncidentDetail() {
       )}
 
       {tab === "audit" && (
-        <div className="grid gap-4 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-3 [&>*]:min-w-0">
           <Card className="overflow-hidden rounded-2xl xl:col-span-2">
             <CardHeader title="Audit History" subtitle="Full trail of every change" icon={History} />
             <div className="overflow-x-auto">

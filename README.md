@@ -15,7 +15,6 @@
 
 > *ResQNet ranks every emergency with explainable rules and sends the **right** team (not just the nearest). It keeps working when networks fail. Its innovations dispatch by **survival**, turn trained citizens into first responders, accept reports by **SMS** and **voice in Tamil**, and **predict** where help will be needed before people call.*
 
-![Citizen home](docs/screenshots/c-home-d.png)
 
 ---
 
@@ -92,7 +91,6 @@ During road accidents, fires, floods and building collapses, a city's emergency 
 
 **Statuses:** Reported → Pending → **Assigned** → In Progress → Resolved (every change is timestamped in the timeline).
 
-![Report on mobile](docs/screenshots/r-m1.png) ![Incident detail](docs/screenshots/r2-admin_incidents_INC-1010.png)
 
 ---
 
@@ -109,7 +107,6 @@ During road accidents, fires, floods and building collapses, a city's emergency 
 
 Also included: escalation alarms (Critical with no team > 2 min, High > 5 min, team not accepting, resource shortage), public safety **alerts** pushed to the citizen pages, a **"Simulate disaster"** burst for live demos, disaster **zones & shelter** capacity management, and a field **responder portal** (accept/reject with reason, navigate, escalate, field updates, and sidebar pages for assignments, team status, alerts, reports, resources and settings).
 
-![Command centre](docs/screenshots/r2-admin.png)
 
 ---
 
@@ -124,7 +121,6 @@ Most emergency apps stop at *report → dashboard → nearest team*. ResQNet add
 - **Dispatch plan:** when several emergencies compete for few teams, a greedy optimiser assigns teams to save the most expected lives, compared side by side with nearest-team-first. One click applies it.
 - **Proof:** a seeded simulation (40 disaster bursts × 25 incidents, the same 13 teams) gives **≈ +31 % expected survivors (+8.2 lives per disaster)** versus nearest-first. *This is a simulation with simplified survival curves, labelled as such in the UI.*
 
-![Golden Hour](docs/screenshots/final-gh.png)
 
 ### 2. CPR Hero Network — the closest responder is usually not in an ambulance
 *Where:* `backend/app/heroes.py`, `/hero`, global popup in `sections/HeroLive.tsx`.
@@ -133,14 +129,12 @@ Most emergency apps stop at *report → dashboard → nearest team*. ResQNet add
 - Hero flow: *I'm going → Navigate → Arrived → **CPR guide** (110 bpm metronome, 30:2 counter) → handed over to the ambulance*. When CPR starts, the incident's **survival curve visibly bends upward** for the control room.
 - If nobody is within 3 km the search widens (up to 25 km); a decline alerts the next hero; the admin can send a specific hero by hand.
 
-![Hero alert](docs/screenshots/p-popup.png) ![CPR guide](docs/screenshots/h-cpr.png)
 
 ### 3. Predictive Risk Radar — every other system reacts, ResQNet predicts
 *Where:* `backend/app/risk.py`, `/admin/risk`.
 - Risk score per Chennai area for the **next 6 hours** = 40 % forecast rain (live Open-Meteo data, no API key) × how flood-prone the area is (simplified index from the 2015/2023 floods) + 25 % live incident pressure + 15 % flood history + 20 % distance to the nearest free rescue unit.
 - Recommends **pre-positioning** a boat or NDRF team before calls arrive, in one click. A "heavy rain" scenario switch allows demos on dry days.
 
-![Risk radar](docs/screenshots/i-risk-d.png)
 
 ### 4. SMS fallback — works on a ₹1,000 feature phone with no data
 *Where:* `backend/app/nlp.py`, `POST /api/sms`, `/sms` simulator.
@@ -150,7 +144,6 @@ Most emergency apps stop at *report → dashboard → nearest team*. ResQNet add
 *Where:* `ReportFlow.tsx` + `lib/speech.ts` + `POST /api/parse`.
 - Press the mic, speak naturally ("வேளச்சேரியில் வெள்ளம், குழந்தைகள் சிக்கி இருக்காங்க"). The transcript fills the form: category, area, people, life threat, injuries, vulnerable people. A **"please check"** banner with confidence is shown. If the area isn't spoken, **live GPS** fills it. A typed fallback runs the same parser.
 
-![SMS](docs/screenshots/i-sms-m.png) ![Voice report](docs/screenshots/i-report-m.png)
 
 ### Design principles
 - **Explainable:** rules decide severity and every point is visible; humans approve dispatch; nothing is a black box.
@@ -202,7 +195,6 @@ Most emergency apps stop at *report → dashboard → nearest team*. ResQNet add
 ```
 cobot_hackathon/
 ├── README.md                              # This document
-├── docs/screenshots/                      # Screenshots used in this README
 ├── tools/
 │   ├── run_app.ps1 / run_app.sh           # Start backend (8000) + frontend (5173)
 │   ├── stop_app.ps1 / stop_app.sh         # Stop both

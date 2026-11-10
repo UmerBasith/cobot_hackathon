@@ -94,6 +94,16 @@ class Assignment(BaseModel):
     updated_at: str
 
 
+class ResponderEscalation(BaseModel):
+    """Raised from the field by a responder ("Escalate" quick action). Shown to the control room until handled."""
+    at: str
+    team_id: str
+    team_name: str
+    reason: str
+    needs: list[str] = []
+    note: str = ""
+
+
 class Incident(PreviewIn, SeverityOut):
     id: str
     status: Status
@@ -101,6 +111,7 @@ class Incident(PreviewIn, SeverityOut):
     witnesses: int = 0
     assignments: list[Assignment] = []
     volunteers: list[dict] = []
+    escalation: ResponderEscalation | None = None
     created_at: str
     updated_at: str
     timeline: list[TimelineEntry]
@@ -166,6 +177,23 @@ class RespondIn(BaseModel):
 
 class AssignmentStatusIn(BaseModel):
     status: Literal["en_route", "on_scene", "completed"]
+    note: str = Field(default="", max_length=500)
+
+
+FieldTag = Literal["situation", "contained", "rescued", "need_time", "casualty"]
+NeedType = Literal["fire", "rescue", "ambulance", "police", "ndrf", "boat", "hazmat", "power"]
+
+
+class FieldUpdateIn(BaseModel):
+    """'Update Status' quick action: a situation report from the field (no stage change)."""
+    note: str = Field(min_length=3, max_length=500)
+    tag: FieldTag = "situation"
+
+
+class EscalateIn(BaseModel):
+    """'Escalate' quick action: the team needs more help than it has."""
+    reason: str = Field(min_length=3, max_length=200)
+    needs: list[NeedType] = Field(default=[], max_length=8)
     note: str = Field(default="", max_length=500)
 
 

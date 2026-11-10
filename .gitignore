@@ -13,3 +13,6 @@ scratch-deck/
 # local secrets (map API key)
 .env
 .env.local
+
+# downloaded tools (not committed)
+tools/bin/

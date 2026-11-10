@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import db
 from .dispatch import active_assignments, escalations, eta, make_teams, similar, suggest
-from .schemas import (Alert, AlertIn, AssignIn, AssignmentStatusIn, DuplicateIn, Escalation, Incident, PreviewIn,
+from .schemas import (Alert, AlertIn, AssignIn, AssignmentStatusIn, DuplicateIn, Escalation, EscalateIn, FieldUpdateIn,
+                      Incident, PreviewIn,
                       ReportIn, RespondIn, ResponderJob, SeverityOut, Similar, SimulateIn, Stats, StatusIn,
                       SuggestSlot, Team)
 from .schemas import Analytics, Shelter, ShelterIn, TrackOut, Zone, ZoneIn
@@ -361,6 +362,8 @@ def assignment_status(asg_id: str, body: AssignmentStatusIn) -> dict:
         a["note"] = body.note.strip()
     label = {"en_route": "is on the way", "on_scene": "arrived on scene", "completed": "finished"}[body.status]
     note = f"{a['team_name']} {label}" + (f": {body.note.strip()}" if body.note.strip() else "")
+    if body.status in ("en_route", "on_scene") and inc["status"] in ("Reported", "Pending"):
+        inc["status"] = "In Progress"
     if body.status == "completed":
         t = teams_by_id().get(a["team_id"])
         if t:
@@ -368,6 +371,56 @@ def assignment_status(asg_id: str, body: AssignmentStatusIn) -> dict:
             db.put_doc("team", t)
         if not active_assignments(inc):
             note += " — all teams done, ready for admin to resolve"
+    inc["timeline"].append({"at": at, "status": inc["status"], "note": note, "actor": "responder"})
+    inc["updated_at"] = at
+    db.save(inc)
+    return inc
+
+
+FIELD_TAG_LABEL = {"situation": "Situation update", "contained": "Hazard contained", "rescued": "People rescued",
+                   "need_time": "Needs more time", "casualty": "Casualty update"}
+NEED_LABEL = {"fire": "fire engine", "rescue": "rescue/ladder unit", "ambulance": "ambulance", "police": "police",
+              "ndrf": "NDRF team", "boat": "rescue boat", "hazmat": "HAZMAT team", "power": "power board (TANGEDCO)"}
+
+
+def active_or_400(asg_id: str) -> tuple[dict, dict]:
+    inc, a = find_assignment(asg_id)
+    if a["status"] not in ("accepted", "en_route", "on_scene"):
+        raise HTTPException(400, f"Accept the job first (assignment is {a['status']})")
+    if inc["status"] == "Resolved":
+        raise HTTPException(400, f"{inc['id']} is already resolved")
+    return inc, a
+
+
+@app.post("/api/assignments/{asg_id}/update", response_model=Incident)
+def field_update(asg_id: str, body: FieldUpdateIn) -> dict:
+    """'Update Status' quick action: situation report from the field. Appears on the admin incident page
+    and the citizen tracking page (both refresh every 5 s)."""
+    inc, a = active_or_400(asg_id)
+    at = now_iso()
+    note = f"{a['team_name']} · {FIELD_TAG_LABEL[body.tag]}: {body.note.strip()}"
+    if inc["status"] in ("Reported", "Pending"):
+        inc["status"] = "In Progress"
+    inc["timeline"].append({"at": at, "status": inc["status"], "note": note, "actor": "responder"})
+    a["note"], a["updated_at"] = body.note.strip(), at
+    inc["updated_at"] = at
+    db.save(inc)
+    return inc
+
+
+@app.post("/api/assignments/{asg_id}/escalate", response_model=Incident)
+def escalate(asg_id: str, body: EscalateIn) -> dict:
+    """'Escalate' quick action: raises a critical alert in the control room until more teams are assigned."""
+    inc, a = active_or_400(asg_id)
+    at = now_iso()
+    needs = list(dict.fromkeys(body.needs))
+    inc["escalation"] = {"at": at, "team_id": a["team_id"], "team_name": a["team_name"], "reason": body.reason.strip(),
+                         "needs": needs, "note": body.note.strip(),
+                         "teams_at": len(inc.get("assignments", []))}  # cleared once the admin adds a team
+    want = ", ".join(NEED_LABEL[n] for n in needs)
+    note = f"ESCALATED by {a['team_name']}: {body.reason.strip()}" + (f" — needs {want}" if want else "") +            (f". {body.note.strip()}" if body.note.strip() else "")
+    if inc["status"] in ("Reported", "Pending"):
+        inc["status"] = "In Progress"
     inc["timeline"].append({"at": at, "status": inc["status"], "note": note, "actor": "responder"})
     inc["updated_at"] = at
     db.save(inc)

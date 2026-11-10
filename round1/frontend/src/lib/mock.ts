@@ -34,6 +34,8 @@ export interface Incident extends Required<Omit<ReportIn, "lat" | "lng" | "repor
   reported_severity?: Severity | null; anonymous?: boolean; photo?: string | null;
   id: string; lat: number | null; lng: number | null;
   status: Status; duplicate_of: string | null;
+  /** Raised by a responder from the field ("Escalate" quick action). */
+  escalation?: { at: string; team_id: string; team_name: string; reason: string; needs: string[]; note: string } | null;
   created_at: string; updated_at: string; timeline: TimelineEntry[];
   /** Round 2 (defaults 0 / []) */
   witnesses: number; assignments: Assignment[];

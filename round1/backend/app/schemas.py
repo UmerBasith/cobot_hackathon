@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 Category = Literal["fire", "road_accident", "medical", "flood", "building_collapse", "gas_leak", "electrical", "landslide", "other"]
 Severity = Literal["Low", "Medium", "High", "Critical"]
-Status = Literal["Reported", "Pending", "In Progress", "Resolved"]
+Status = Literal["Reported", "Pending", "Assigned", "In Progress", "Resolved"]
 Injuries = Literal["none", "minor", "serious"]
 Hazard = Literal["small", "medium", "large", "spreading"]
 Vulnerable = Literal["children", "elderly", "patients", "disabled", "pregnant"]
@@ -30,6 +30,7 @@ class ReportBase(BaseModel):
     contact_phone: str = Field(default="", max_length=20)
     reported_severity: Literal["Low", "Medium", "High", "Critical"] | None = None  # citizen's own judgement (info only)
     anonymous: bool = False
+    source: Literal["app", "sms", "voice", "call"] = "app"
     photo: str | None = Field(default=None, max_length=3_000_000)  # data URL, optional evidence
 
 
@@ -75,6 +76,7 @@ class Team(BaseModel):
     lng: float
     status: Literal["available", "busy", "offline"]
     current_incident: str | None = None
+    crew: int = 4
 
 
 AssignmentStatus = Literal["assigned", "accepted", "rejected", "en_route", "on_scene", "completed"]
@@ -109,6 +111,8 @@ class Incident(PreviewIn, SeverityOut):
     status: Status
     duplicate_of: str | None = None
     witnesses: int = 0
+    priority_score: float | None = None   # severity score + time-since-report bonus (ranking)
+    waiting_min: float | None = None
     assignments: list[Assignment] = []
     volunteers: list[dict] = []
     escalation: ResponderEscalation | None = None
@@ -144,6 +148,9 @@ class AreaCount(CountRow):
 
 
 class Stats(BaseModel):
+    assigned: int = 0
+    available_teams: int = 0
+    busy_teams: int = 0
     total: int
     critical: int
     pending: int
@@ -307,3 +314,33 @@ class Analytics(BaseModel):
     by_severity: list[dict]         # [{severity, total, open}]
     by_status: list[dict]           # [{status, count}]
     team_performance: list[dict]    # [{team_id, team_name, type_label, jobs, completed, rejected, avg_eta_min}]
+
+
+TeamType = Literal["fire", "ambulance_als", "ambulance_bls", "police", "ndrf", "boat"]
+
+
+class TeamIn(BaseModel):
+    name: str = Field(min_length=3, max_length=80)
+    type: TeamType
+    station: str = Field(min_length=1, max_length=80)   # area name
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    crew: int = Field(default=4, ge=1, le=50)
+
+
+class TeamPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=3, max_length=80)
+    status: Literal["available", "busy", "offline"] | None = None
+    station: str | None = Field(default=None, min_length=1, max_length=80)
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    crew: int | None = Field(default=None, ge=1, le=50)
+
+
+class SmsIn(BaseModel):
+    sender: str = Field(default="", max_length=20)
+    text: str = Field(min_length=2, max_length=480)
+
+
+class ParseIn(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)

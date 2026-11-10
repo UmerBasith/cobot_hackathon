@@ -132,7 +132,7 @@ def test_suggest_assign_reject_accept_complete(client):
     ids = [s["best"] for s in slots if s["best"]]
     assert len(ids) == len(set(ids)) >= 2
     out = client.post(f"/api/incidents/{inc['id']}/assign", json={"team_ids": ids}).json()
-    assert out["status"] == "In Progress" and len(out["assignments"]) == len(ids)
+    assert out["status"] == "Assigned" and len(out["assignments"]) == len(ids)
     assert client.post(f"/api/incidents/{inc['id']}/assign", json={"team_ids": ids[:1]}).status_code == 409
     first, second = out["assignments"][0], out["assignments"][1]
     rej = client.post(f"/api/assignments/{first['id']}/respond", json={"accept": False, "reason": "No equipment"}).json()
@@ -291,3 +291,51 @@ def test_responder_quick_actions_reach_admin_and_citizen(client):
     assert any(t["status"] == "completed" for t in track["teams"]) and "Fire out, 2 rescued" in track["timeline"][-1]["note"]
     # finished job can't be updated any more
     assert client.post(f"/api/assignments/{asg['id']}/update", json={"note": "late note"}).status_code == 400
+
+
+# ---------- Round 2 required + innovations (SMS, parse, risk radar) ----------
+def test_priority_includes_time_since_report(client):
+    items = client.get("/api/incidents").json()
+    assert all("priority_score" in i and "waiting_min" in i for i in items)
+    waiting = [i for i in items if i["status"] in ("Reported", "Pending")]
+    assert any(i["priority_score"] > i["score"] for i in waiting)
+
+
+def test_team_create_update_delete_and_auto_assign(client):
+    t = client.post("/api/teams", json={"name": "Fire Engine · Velachery", "type": "fire", "station": "Velachery"}).json()
+    assert t["id"].startswith("FIRE-") and t["status"] == "available"
+    assert client.patch(f"/api/teams/{t['id']}", json={"status": "offline"}).json()["status"] == "offline"
+    client.patch(f"/api/teams/{t['id']}", json={"status": "available", "station": "Adyar"})
+    assert client.post("/api/teams", json={"name": "X", "type": "fire", "station": "Velachery"}).status_code == 422
+    inc = client.post("/api/incidents", json=report(category="fire", area="Adyar", lat=13.0012, lng=80.2565)).json()
+    out = client.post(f"/api/incidents/{inc['id']}/auto-assign").json()
+    assert out["status"] == "Assigned" and out["assignments"]
+    s = client.get("/api/stats").json()
+    assert s["assigned"] >= 1 and s["busy_teams"] >= 1 and s["available_teams"] >= 1
+    free = next(x for x in client.get("/api/teams").json() if x["status"] == "available")
+    assert client.delete(f"/api/teams/{free['id']}").json() == {"deleted": free["id"]}
+
+
+def test_route_falls_back_offline(client):
+    r = client.get("/api/route", params={"from_lat": 13.0, "from_lng": 80.2, "to_lat": 13.05, "to_lng": 80.25}).json()
+    assert r["distance_km"] > 0 and len(r["coords"]) >= 2
+
+
+def test_sms_creates_incident_and_parse(client):
+    r = client.post("/api/sms", json={"sender": "98400 12345", "text": "FIRE TNAGAR 5 TRAPPED"}).json()
+    assert r["ok"] and r["incident"]["category"] == "fire" and r["incident"]["area"] == "T. Nagar"
+    assert r["incident"]["severity"] == "Critical" and r["incident"]["source"] == "sms" and "INC-" in r["reply"]
+    assert client.post("/api/sms", json={"text": "help"}).json()["ok"] is False
+    assert client.get("/api/sms").json()
+    p = client.post("/api/parse", json={"text": "வேளச்சேரியில் வெள்ளம், குழந்தைகள் சிக்கி இருக்காங்க"}).json()
+    assert p["fields"]["category"] == "flood" and p["fields"]["area"] == "Velachery" and p["fields"]["life_threat"]
+
+
+def test_risk_radar(client):
+    r = client.get("/api/risk", params={"scenario": "heavy_rain"}).json()
+    assert r["areas"][0]["area"] in ("Velachery", "Tambaram", "Adyar") and r["areas"][0]["level"] in ("severe", "high")
+    assert r["areas"][0]["recommendation"]
+    assert client.get("/api/risk").json()["areas"]
+    rec = next(a["recommendation"] for a in r["areas"] if a["recommendation"] and a["recommendation"]["team_id"])
+    out = client.post("/api/risk/preposition", params={"area": "Velachery", "team_id": rec["team_id"]})
+    assert out.status_code in (200, 409)

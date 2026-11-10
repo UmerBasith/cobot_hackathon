@@ -193,3 +193,25 @@ Survival model: survival = 95 % × 0.5^(minutes waiting / half-life); half-life 
 Volunteer (on Incident.volunteers[]): `{id,name,skills[],status:"alerted"|"accepted"|"declined"|"arrived"|"cpr"|"done",distance_m,eta_min,alerted_at,updated_at,cpr_at|null}`.
 Auto: a new report with life_threat or serious injuries automatically alerts the 3 nearest heroes (≤3 km). Decline → next hero alerted.
 Demo: report "Man collapsed, not breathing" (medical, life threat) at T. Nagar (13.041, 80.2345) → heroes Priya S / Deepa R / Anitha G alerted → open /hero?id=HERO-01 → Accept → Arrived → Start CPR (metronome) → survival curve on admin bends up.
+
+## 13. ROUND 2 OFFICIAL FEATURES + INNOVATIONS (SMS, Risk Radar, Voice) — backend DONE (37 tests)
+Official Round 2 brief: 1 Intelligent prioritisation (severity, people, TIME SINCE REPORTING, category) · 2 Team management (create & manage: name/ID, category, location, availability, assigned incident) · 3 Location-based nearest suitable team · 4 Tracking (Reported → Assigned → In Progress → Resolved, team details, busy/available) · 5 Route & location visualisation (team ↔ incident) · 6 Analytics (total, critical, available teams, busy teams, assigned incidents, resolved, by category).
+
+Backend changes:
+- `Status` now = "Reported" | "Pending" | "Assigned" | "In Progress" | "Resolved". Assigning a team → "Assigned"; team en route / on scene / field update → "In Progress".
+- Incident has `priority_score` (= severity score + time-since-report bonus, +1 per 2 min while Reported/Pending, max +10) and `waiting_min`; GET /api/incidents ranks by severity level → priority_score. Also `source`: "app"|"sms"|"voice"|"call".
+- `Team` has `crew` (default 4).
+- `/api/stats` adds `assigned`, `available_teams`, `busy_teams`.
+
+| Method | Path | Body → Response |
+|---|---|---|
+| POST | /api/teams | `{name, type: fire|ambulance_als|ambulance_bls|police|ndrf|boat, station (area name), lat?, lng?, crew?}` → Team (201) |
+| PATCH | /api/teams/{id} | `{name?, status?: available|busy|offline, station?, lat?, lng?, crew?}` → Team (409 if setting available while on an incident) |
+| DELETE | /api/teams/{id} | → `{deleted}` (409 if busy) |
+| POST | /api/incidents/{id}/auto-assign | → Incident: nearest available suitable team for every need, one click (409 none) |
+| GET | /api/route?from_lat&from_lng&to_lat&to_lng | → `{source: "road (OSRM)"|"straight line (offline)", distance_km, duration_min, coords: [[lat,lng],...]}` |
+| POST | /api/parse | `{text}` → `{fields: {category, area|null, people_affected, life_threat, injuries, injured_count, hazard, active, vulnerable[]}, matched, confidence 0-1}` (English / Tamil script / Tanglish) |
+| POST | /api/sms | `{sender, text}` e.g. "FIRE TNAGAR 5 TRAPPED" → `{ok, reply (SMS text back), parsed, incident|null}` |
+| GET | /api/sms | SMS log `[{id, at, sender, text, reply, incident_id}]` |
+| GET | /api/risk?scenario=heavy_rain | → `{source ("live" Open-Meteo | "unavailable" | "demo scenario: heavy rain"), max_risk, method, areas: [{area, lat, lng, risk 0-100, level: severe|high|elevated|low, rain_mm_6h, flood_prone, open_incidents, critical_incidents, nearest_unit_km, drivers: string[], recommendation: {team_id|null, team_name, text}|null}]}` sorted by risk |
+| POST | /api/risk/preposition?area=&team_id= | → Team moved to stand by in that area (409 if not available) |

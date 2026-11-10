@@ -19,9 +19,11 @@ from .seed import SEED, SIMULATE_FLOOD
 from .zones import SHELTERS_SEED, ZONES_SEED
 from . import golden
 from .heroes import make_heroes, nearby, needs_heroes
+from . import nlp, risk as riskmod
+from .schemas import ParseIn, SmsIn, TeamIn, TeamPatch
 from .severity import CATEGORY_LABELS, LEVELS, assess, level_for
 
-STATUSES = ["Reported", "Pending", "In Progress", "Resolved"]
+STATUSES = ["Reported", "Pending", "Assigned", "In Progress", "Resolved"]
 
 
 def now_iso(delta_min: int = 0) -> str:
@@ -57,7 +59,8 @@ def build_incident(seq: int, report: dict, status: str = "Reported", minutes_ago
     steps = STATUSES[1:STATUSES.index(status) + 1]
     for i, st in enumerate(steps, 1):
         at = now_iso(max(0, minutes_ago - i * max(1, minutes_ago // (len(steps) + 1))))
-        note = {"Pending": "Verified by control room", "In Progress": "Response team on the way",
+        note = {"Pending": "Verified by control room", "Assigned": "Response team assigned",
+                "In Progress": "Response team on the way",
                 "Resolved": "Situation under control"}[st]
         inc["timeline"].append({"at": at, "status": st, "note": note, "actor": "admin"})
         inc["status"], inc["updated_at"] = st, at
@@ -92,6 +95,7 @@ def reset_data() -> int:
     db.clear_docs("alert")
     db.clear_docs("zone")
     db.clear_docs("hero")
+    db.clear_docs("sms")
     for h in make_heroes():
         db.put_doc("hero", h)
     db.clear_docs("shelter")
@@ -187,12 +191,28 @@ def list_incidents(status: str | None = None, severity: str | None = None,
     if q:
         ql = q.lower().strip()
         items = [i for i in items if ql in f'{i["id"]} {i["title"]} {i["description"]} {i["area"]} {i["landmark"]}'.lower()]
-    return sorted(items, key=sort_key)
+    return sorted((with_priority(i) for i in items), key=rank_key)
+
+
+WAIT_CAP = 10  # max points for waiting
+
+
+def with_priority(inc: dict) -> dict:
+    """Ranking = severity score + time since report (+1 per 2 min while no team is assigned, max +10)."""
+    from .golden import _mins
+    waited = _mins(inc["created_at"])
+    unassigned = inc["status"] in ("Reported", "Pending")
+    bonus = min(WAIT_CAP, waited / 2) if unassigned else 0
+    return {**inc, "waiting_min": round(waited, 1), "priority_score": round(min(100, inc["score"] + bonus), 1)}
+
+
+def rank_key(inc: dict) -> tuple:
+    return (inc["status"] == "Resolved", -LEVELS.index(inc["severity"]), -inc["priority_score"], inc["created_at"])
 
 
 @app.get("/api/incidents/{inc_id}", response_model=Incident)
 def get_incident(inc_id: str) -> dict:
-    return get_or_404(inc_id)
+    return with_priority(get_or_404(inc_id))
 
 
 @app.patch("/api/incidents/{inc_id}/status", response_model=Incident)
@@ -262,6 +282,9 @@ def stats() -> dict:
         "total": len(items),
         "critical": sum(i["severity"] == "Critical" and i["status"] != "Resolved" for i in items),
         "pending": by_status["Reported"] + by_status["Pending"],
+        "assigned": by_status["Assigned"],
+        "available_teams": sum(t["status"] == "available" for t in db.docs("team")),
+        "busy_teams": sum(t["status"] == "busy" for t in db.docs("team")),
         "in_progress": by_status["In Progress"],
         "resolved": by_status["Resolved"],
         "by_category": [{"category": c, "label": lbl, "count": sum(i["category"] == c for i in items)}
@@ -310,7 +333,7 @@ def assign(inc_id: str, body: AssignIn) -> dict:
         a = new_assignment(inc, teams[tid], at=at)
         names.append(f"{a['team_name']} (ETA {round(a['eta_min'])} min)")
     if inc["status"] in ("Reported", "Pending"):
-        inc["status"] = "In Progress"
+        inc["status"] = "Assigned"
     inc["timeline"].append({"at": at, "status": inc["status"], "note": "Assigned: " + ", ".join(names), "actor": "admin"})
     inc["updated_at"] = at
     db.save(inc)
@@ -362,7 +385,7 @@ def assignment_status(asg_id: str, body: AssignmentStatusIn) -> dict:
         a["note"] = body.note.strip()
     label = {"en_route": "is on the way", "on_scene": "arrived on scene", "completed": "finished"}[body.status]
     note = f"{a['team_name']} {label}" + (f": {body.note.strip()}" if body.note.strip() else "")
-    if body.status in ("en_route", "on_scene") and inc["status"] in ("Reported", "Pending"):
+    if body.status in ("en_route", "on_scene") and inc["status"] in ("Reported", "Pending", "Assigned"):
         inc["status"] = "In Progress"
     if body.status == "completed":
         t = teams_by_id().get(a["team_id"])
@@ -399,7 +422,7 @@ def field_update(asg_id: str, body: FieldUpdateIn) -> dict:
     inc, a = active_or_400(asg_id)
     at = now_iso()
     note = f"{a['team_name']} · {FIELD_TAG_LABEL[body.tag]}: {body.note.strip()}"
-    if inc["status"] in ("Reported", "Pending"):
+    if inc["status"] in ("Reported", "Pending", "Assigned"):
         inc["status"] = "In Progress"
     inc["timeline"].append({"at": at, "status": inc["status"], "note": note, "actor": "responder"})
     a["note"], a["updated_at"] = body.note.strip(), at
@@ -419,7 +442,7 @@ def escalate(asg_id: str, body: EscalateIn) -> dict:
                          "teams_at": len(inc.get("assignments", []))}  # cleared once the admin adds a team
     want = ", ".join(NEED_LABEL[n] for n in needs)
     note = f"ESCALATED by {a['team_name']}: {body.reason.strip()}" + (f" — needs {want}" if want else "") +            (f". {body.note.strip()}" if body.note.strip() else "")
-    if inc["status"] in ("Reported", "Pending"):
+    if inc["status"] in ("Reported", "Pending", "Assigned"):
         inc["status"] = "In Progress"
     inc["timeline"].append({"at": at, "status": inc["status"], "note": note, "actor": "responder"})
     inc["updated_at"] = at
@@ -744,3 +767,154 @@ def hero_respond(hero_id: str, body: dict) -> dict:
                 db.put_doc("hero", h)
     db.save(inc)
     return inc
+
+
+# ======================= Round 2: team management (create / edit / remove) =======================
+TYPE_PREFIX = {"fire": "FIRE", "ambulance_als": "ALS", "ambulance_bls": "BLS", "police": "POL", "ndrf": "NDRF", "boat": "BOAT"}
+TYPE_LABEL = {"fire": "Fire engine", "ambulance_als": "ALS ambulance", "ambulance_bls": "BLS ambulance",
+              "police": "Police", "ndrf": "NDRF rescue", "boat": "Rescue boat"}
+
+
+@app.post("/api/teams", response_model=Team, status_code=201)
+def create_team(body: TeamIn) -> dict:
+    from .geo import AREAS
+    if body.station not in AREAS and (body.lat is None or body.lng is None):
+        raise HTTPException(422, "Unknown station area — give lat/lng")
+    lat, lng = (body.lat, body.lng) if body.lat is not None and body.lng is not None else AREAS[body.station]
+    existing = {t["id"] for t in db.docs("team")}
+    n = 1
+    while f"{TYPE_PREFIX[body.type]}-{n:02d}" in existing:
+        n += 1
+    team = {"id": f"{TYPE_PREFIX[body.type]}-{n:02d}", "name": body.name.strip(), "type": body.type,
+            "type_label": TYPE_LABEL[body.type], "station": body.station, "lat": lat, "lng": lng,
+            "status": "available", "current_incident": None, "crew": body.crew}
+    db.put_doc("team", team)
+    return team
+
+
+@app.patch("/api/teams/{team_id}", response_model=Team)
+def update_team(team_id: str, body: TeamPatch) -> dict:
+    t = teams_by_id().get(team_id.upper())
+    if not t:
+        raise HTTPException(404, f"Team {team_id} not found")
+    data = body.model_dump(exclude_none=True)
+    if data.get("status") == "available" and t.get("current_incident"):
+        raise HTTPException(409, f"{t['name']} is still on {t['current_incident']} — complete or reassign first")
+    if "station" in data and ("lat" not in data or "lng" not in data):
+        from .geo import AREAS
+        if data["station"] in AREAS:
+            data["lat"], data["lng"] = AREAS[data["station"]]
+    t.update(data)
+    db.put_doc("team", t)
+    return t
+
+
+@app.delete("/api/teams/{team_id}")
+def delete_team(team_id: str) -> dict:
+    t = teams_by_id().get(team_id.upper())
+    if not t:
+        raise HTTPException(404, f"Team {team_id} not found")
+    if t["status"] == "busy":
+        raise HTTPException(409, f"{t['name']} is busy on {t['current_incident']}")
+    with db._lock, db.conn() as c:  # noqa: SLF001
+        db._docs(c)  # noqa: SLF001
+        c.execute("DELETE FROM docs WHERE kind = 'team' AND id = ?", (t["id"],))
+    return {"deleted": t["id"]}
+
+
+@app.post("/api/incidents/{inc_id}/auto-assign", response_model=Incident)
+def auto_assign(inc_id: str) -> dict:
+    """Nearest available AND suitable team for every need of this incident, in one click."""
+    inc = get_or_404(inc_id)
+    ids = [s["best"] for s in suggest(inc, db.docs("team")) if s["best"]]
+    if not ids:
+        raise HTTPException(409, "No suitable team is available right now")
+    return assign(inc_id, AssignIn(team_ids=ids))
+
+
+_ROUTE_CACHE: dict[str, dict] = {}
+
+
+@app.get("/api/route")
+def route(from_lat: float, from_lng: float, to_lat: float, to_lng: float) -> dict:
+    """Road route via the public OSRM demo server (needs internet); straight line if unavailable."""
+    import json as _json
+    import urllib.request
+    from .geo import haversine_m
+    key = f"{from_lat:.4f},{from_lng:.4f},{to_lat:.4f},{to_lng:.4f}"
+    if key in _ROUTE_CACHE:
+        return _ROUTE_CACHE[key]
+    url = (f"https://router.project-osrm.org/route/v1/driving/{from_lng},{from_lat};{to_lng},{to_lat}"
+           "?overview=full&geometries=geojson")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "resqnet-demo"})
+        with urllib.request.urlopen(req, timeout=4) as r:
+            d = _json.loads(r.read())
+        rt = d["routes"][0]
+        out = {"source": "road (OSRM)", "distance_km": round(rt["distance"] / 1000, 1),
+               "duration_min": round(rt["duration"] / 60, 1),
+               "coords": [[c[1], c[0]] for c in rt["geometry"]["coordinates"]]}
+    except Exception:  # noqa: BLE001
+        km = haversine_m(from_lat, from_lng, to_lat, to_lng) / 1000
+        out = {"source": "straight line (offline)", "distance_km": round(km, 1), "duration_min": round(2 + km / 25 * 60, 1),
+               "coords": [[from_lat, from_lng], [to_lat, to_lng]]}
+    _ROUTE_CACHE[key] = out
+    return out
+
+
+# ======================= Innovation: SMS fallback + voice/text parsing =======================
+@app.post("/api/parse")
+def parse_text(body: ParseIn) -> dict:
+    """Free text / voice transcript (English, Tamil, Tanglish) -> report fields for auto-fill."""
+    return nlp.parse(body.text)
+
+
+@app.post("/api/sms")
+def receive_sms(body: SmsIn) -> dict:
+    """SMS gateway webhook (simulated). e.g. 'FIRE TNAGAR 5 TRAPPED' -> incident + reply SMS."""
+    p = nlp.parse(body.text)
+    f = p["fields"]
+    if not f["area"]:
+        reply = "ResQNet: we could not find your area. Reply like: FIRE TNAGAR 5 TRAPPED. Danger to life? Call 112."
+        db.put_doc("sms", {"id": f"SMS-{len(db.docs('sms')) + 1}", "at": now_iso(), "sender": body.sender,
+                           "text": body.text, "reply": reply, "incident_id": None})
+        return {"ok": False, "reply": reply, "parsed": p, "incident": None}
+    from .severity import CATEGORY_LABELS as CL
+    report = {**DEFAULTS, **f, "title": f"SMS: {CL.get(f['category'], 'Emergency')} at {f['area']}",
+              "description": f"[SMS from {body.sender or 'unknown'}] {body.text}"[:2000],
+              "contact_phone": body.sender[:20], "source": "sms"}
+    inc = db.insert(lambda seq: build_incident(seq, report, actor="sms"))
+    if needs_heroes(inc):
+        alert_heroes(inc, 3, actor="system")
+        db.save(inc)
+    reply = (f"ResQNet: received {inc['id']} ({CL.get(inc['category'], '')}, {inc['area']}). Priority {inc['severity']}. "
+             f"Help is being arranged. Track: /track/{inc['id']}. Danger to life? Call 112.")
+    db.put_doc("sms", {"id": f"SMS-{len(db.docs('sms')) + 1}", "at": now_iso(), "sender": body.sender,
+                       "text": body.text, "reply": reply, "incident_id": inc["id"]})
+    return {"ok": True, "reply": reply, "parsed": p, "incident": inc}
+
+
+@app.get("/api/sms")
+def sms_log() -> list[dict]:
+    return list(reversed(db.docs("sms")))
+
+
+# ======================= Innovation: Predictive Risk Radar =======================
+@app.get("/api/risk")
+def risk_radar(scenario: str | None = None) -> dict:
+    return riskmod.radar(db.all_incidents(), db.docs("team"), scenario)
+
+
+@app.post("/api/risk/preposition")
+def preposition(area: str, team_id: str) -> dict:
+    """Move a free team's standby position to a high-risk area before calls come in."""
+    from .geo import AREAS
+    t = teams_by_id().get(team_id.upper())
+    if not t or area not in AREAS:
+        raise HTTPException(404, "Unknown team or area")
+    if t["status"] != "available":
+        raise HTTPException(409, f"{t['name']} is not available")
+    t["lat"], t["lng"] = AREAS[area]
+    t["station"] = f"{area} (pre-positioned)"
+    db.put_doc("team", t)
+    return t

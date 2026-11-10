@@ -34,12 +34,30 @@ def needs_heroes(inc: dict) -> bool:
     return inc["status"] != "Resolved" and (bool(inc.get("life_threat")) or inc.get("injuries") == "serious")
 
 
-def nearby(inc: dict, heroes: list[dict]) -> list[dict]:
-    if inc.get("lat") is None or inc.get("lng") is None:
+LIVE_TTL_S = 60  # a live website user counts as online if seen in the last minute
+
+
+def is_online(h: dict) -> bool:
+    if not h.get("live"):
+        return True
+    from datetime import datetime, timezone
+    seen = datetime.fromisoformat(h["last_seen"].replace("Z", "+00:00"))
+    return (datetime.now(timezone.utc) - seen).total_seconds() <= LIVE_TTL_S
+
+
+def nearby(inc: dict, heroes: list[dict], radius_m: float = RADIUS_M) -> list[dict]:
+    """Heroes within radius; real website users (live) first, then by distance."""
+    from .geo import AREAS
+    lat, lng = inc.get("lat"), inc.get("lng")
+    if lat is None or lng is None:
+        lat, lng = AREAS.get(inc.get("area", ""), (None, None))
+    if lat is None:
         return []
     out = []
     for h in heroes:
-        d = haversine_m(inc["lat"], inc["lng"], h["lat"], h["lng"])
-        if d <= RADIUS_M:
+        if not is_online(h):
+            continue
+        d = haversine_m(lat, lng, h["lat"], h["lng"])
+        if d <= radius_m:
             out.append({"hero": h, "distance_m": int(d), "eta_min": round(1 + d / 1000 / HERO_SPEED_KMH * 60, 1)})
-    return sorted(out, key=lambda x: x["distance_m"])
+    return sorted(out, key=lambda x: (not x["hero"].get("live"), x["distance_m"]))

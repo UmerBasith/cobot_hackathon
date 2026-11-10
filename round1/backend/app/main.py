@@ -671,23 +671,36 @@ def incident_survival(inc_id: str) -> dict:
 
 
 # ======================= CPR Hero Network =======================
-def alert_heroes(inc: dict, count: int = 3, actor: str = "admin") -> list[dict]:
-    already = {v["id"] for v in inc.get("volunteers", [])}
-    busy = {v["id"] for i in db.all_incidents() if i["id"] != inc["id"] and i["status"] != "Resolved"
+def hero_busy_ids(exclude: str | None = None) -> set[str]:
+    return {v["id"] for i in db.all_incidents() if i["id"] != exclude and i["status"] != "Resolved"
             for v in i.get("volunteers", []) if v["status"] in ("accepted", "arrived", "cpr")}
-    picks = [n for n in nearby(inc, db.docs("hero")) if n["hero"]["id"] not in already and n["hero"]["id"] not in busy
-             and n["hero"]["available"]][:count]
+
+
+def alert_heroes(inc: dict, count: int = 3, actor: str = "admin", only: str | None = None) -> list[dict]:
+    """Alert the nearest free heroes (live website users first). Widens beyond 3 km if nobody is close."""
+    already = {v["id"] for v in inc.get("volunteers", [])}
+    busy = hero_busy_ids(inc["id"])
+    heroes = [h for h in db.docs("hero") if h.get("available", True) and h["id"] not in busy and h["id"] not in already]
+    if only:
+        heroes = [h for h in heroes if h["id"] == only.upper()]
+    picks = nearby(inc, heroes)[:count]
+    widened = False
+    if not picks:
+        picks = nearby(inc, heroes, radius_m=25_000)[:count]
+        widened = bool(picks)
     at = now_iso()
     inc.setdefault("volunteers", [])
     for n in picks:
         h = n["hero"]
         inc["volunteers"].append({"id": h["id"], "name": h["name"], "skills": h["skills"], "status": "alerted",
                                   "distance_m": n["distance_m"], "eta_min": n["eta_min"], "alerted_at": at,
-                                  "updated_at": at, "cpr_at": None})
+                                  "updated_at": at, "cpr_at": None, "live": bool(h.get("live"))})
     if picks:
         inc["timeline"].append({"at": at, "status": inc["status"], "actor": actor,
                                 "note": "CPR Hero Network: alerted " + ", ".join(
-                                    f"{n['hero']['name']} ({n['distance_m']} m)" for n in picks)})
+                                    f"{n['hero']['name']}{' (live user)' if n['hero'].get('live') else ''} "
+                                    f"({n['distance_m']} m)" for n in picks)
+                                + (" — nobody within 3 km, search widened" if widened else "")})
     return picks
 
 
@@ -700,12 +713,13 @@ def list_heroes() -> list[dict]:
 def incident_heroes(inc_id: str) -> dict:
     inc = get_or_404(inc_id)
     status = {v["id"]: v for v in inc.get("volunteers", [])}
-    return {"needs_heroes": needs_heroes(inc), "radius_m": 3000,
+    busy = hero_busy_ids(inc["id"])
+    return {"needs_heroes": needs_heroes(inc), "radius_m": 3000, "busy": sorted(busy),
             "responding": inc.get("volunteers", []),
-            "nearby": [{"id": n["hero"]["id"], "name": n["hero"]["name"], "skills": n["hero"]["skills"],
+            "nearby": [{"id": n["hero"]["id"], "name": n["hero"]["name"], "skills": n["hero"]["skills"], "live": bool(n["hero"].get("live")),
                         "distance_m": n["distance_m"], "eta_min": n["eta_min"],
                         "status": status.get(n["hero"]["id"], {}).get("status", "not alerted")}
-                       for n in nearby(inc, db.docs("hero"))]}
+                       for n in nearby(inc, db.docs("hero"), radius_m=25_000)[:12]]}
 
 
 @app.post("/api/incidents/{inc_id}/heroes/alert")
@@ -716,15 +730,60 @@ def alert_incident_heroes(inc_id: str, count: int = 3) -> dict:
     picks = alert_heroes(inc, max(1, min(count, 5)))
     db.save(inc)
     if not picks:
-        raise HTTPException(409, "No more available CPR heroes within 3 km")
+        raise HTTPException(409, "No free CPR heroes within 25 km")
     return {"alerted": [p["hero"]["id"] for p in picks], "incident": inc}
+
+
+@app.post("/api/incidents/{inc_id}/heroes/send")
+def send_to_hero(inc_id: str, hero_id: str) -> dict:
+    """Admin picks one specific hero."""
+    inc = get_or_404(inc_id)
+    picks = alert_heroes(inc, 1, only=hero_id)
+    if not picks:
+        raise HTTPException(409, f"{hero_id} is busy, offline or already alerted")
+    db.save(inc)
+    return {"alerted": [picks[0]["hero"]["id"]], "incident": inc}
+
+
+@app.post("/api/hero/live")
+def hero_live(body: dict) -> dict:
+    """A citizen with the website open who opted in as CPR / first-aid trained. Call every 15 s (heartbeat)."""
+    from .geo import AREAS
+    cid = str(body.get("client_id", ""))[:24]
+    if len(cid) < 4:
+        raise HTTPException(422, "client_id required")
+    lat, lng = body.get("lat"), body.get("lng")
+    if lat is None or lng is None:
+        area = str(body.get("area", ""))
+        if area not in AREAS:
+            raise HTTPException(422, "Give lat/lng or a known area")
+        lat, lng = AREAS[area]
+    hid = "LIVE-" + "".join(ch for ch in cid if ch.isalnum())[:8].upper()
+    old = next((h for h in db.docs("hero") if h["id"] == hid), None)
+    hero = {"id": hid, "name": (str(body.get("name") or "").strip() or "Nearby citizen")[:40],
+            "skills": [str(x)[:20] for x in (body.get("skills") or ["CPR"])][:4], "lat": float(lat), "lng": float(lng),
+            "phone": "", "available": True, "verified": False, "live": True, "last_seen": now_iso(),
+            "rescues": old.get("rescues", 0) if old else 0}
+    db.put_doc("hero", hero)
+    return hero
+
+
+@app.delete("/api/hero/live/{hero_id}")
+def hero_offline(hero_id: str) -> dict:
+    with db._lock, db.conn() as c:  # noqa: SLF001
+        db._docs(c)  # noqa: SLF001
+        c.execute("DELETE FROM docs WHERE kind = 'hero' AND id = ?", (hero_id.upper(),))
+    return {"offline": hero_id.upper()}
 
 
 @app.get("/api/hero/{hero_id}")
 def hero_inbox(hero_id: str) -> dict:
     hero = next((h for h in db.docs("hero") if h["id"] == hero_id.upper()), None)
     if not hero:
-        raise HTTPException(404, f"Hero {hero_id} not found")
+        raise HTTPException(404, f"Hero {hero_id} not found — open the hero app again")
+    if hero.get("live"):
+        hero["last_seen"] = now_iso()
+        db.put_doc("hero", hero)
     jobs = []
     for inc in db.all_incidents():
         for v in inc.get("volunteers", []):

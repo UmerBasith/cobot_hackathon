@@ -339,3 +339,21 @@ def test_risk_radar(client):
     rec = next(a["recommendation"] for a in r["areas"] if a["recommendation"] and a["recommendation"]["team_id"])
     out = client.post("/api/risk/preposition", params={"area": "Velachery", "team_id": rec["team_id"]})
     assert out.status_code in (200, 409)
+
+
+def test_live_website_hero_gets_alert_first_and_search_widens(client):
+    me = client.post("/api/hero/live", json={"client_id": "abc12345", "name": "Umer", "lat": 12.879, "lng": 80.082}).json()
+    assert me["id"].startswith("LIVE-") and me["live"]
+    inc = client.post("/api/incidents", json=report(category="medical", life_threat=True, injuries="serious",
+                                                     area="Vandalur", lat=12.8778, lng=80.0820)).json()
+    assert inc["volunteers"][0]["id"] == me["id"] and inc["volunteers"][0]["live"]
+    assert client.get(f"/api/hero/{me['id']}").json()["jobs"]
+    out = client.post(f"/api/hero/{me['id']}/respond", json={"incident_id": inc["id"], "action": "accept"}).json()
+    assert next(v for v in out["volunteers"] if v["id"] == me["id"])["status"] == "accepted"
+    # far away incident: nobody within 3 km -> search widens instead of failing
+    far = client.post("/api/incidents", json=report(category="medical", life_threat=True, area="Perambur",
+                                                     lat=13.16, lng=80.24)).json()
+    assert far["volunteers"]
+    sent = client.post(f"/api/incidents/{far['id']}/heroes/send", params={"hero_id": "HERO-13"})
+    assert sent.status_code in (200, 409)
+    assert client.delete(f"/api/hero/live/{me['id']}").json()["offline"] == me["id"]

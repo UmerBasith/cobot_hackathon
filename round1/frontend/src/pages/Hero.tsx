@@ -17,8 +17,9 @@ import { useToast } from "@/ui";
 import { cn } from "@/lib/cn";
 import { usePoll } from "@/lib/usePoll";
 import { STATIC } from "@/lib/static";
+import { getLiveHero, goLive, useLiveHero } from "@/lib/liveHero";
 import {
-  alertBeep, click, fmtDist, fmtEta, getHeroes, getInbox, heroRespond, initials, mapsLink, unlockAudio, vibrate,
+  alertBeep, click, fmtDist, fmtEta, getHeroes, getInbox, getInboxStrict, heroRespond, initials, mapsLink, unlockAudio, vibrate,
   type HeroAction, type HeroJob, type HeroProfile, type VolunteerStatus,
 } from "@/lib/hero";
 
@@ -59,24 +60,42 @@ function emergencyKind(j: HeroJob) {
 export default function Hero() {
   const [params, setParams] = useSearchParams();
   const qId = params.get("id");
-  const [heroId, setHeroId] = useState<string | null>(() => (qId ? qId.toUpperCase() : ls.get(LS_ID)));
+  const focus = params.get("incident");
+  const liveHero = useLiveHero();
+  const [heroId, setHeroId] = useState<string | null>(() => (qId ? qId.toUpperCase() : getLiveHero()?.heroId ?? ls.get(LS_ID)));
+  const [unknown, setUnknown] = useState<string | null>(null);
   useEffect(() => { if (qId) { setHeroId(qId.toUpperCase()); ls.set(LS_ID, qId.toUpperCase()); } }, [qId]);
 
-  const signIn = (id: string) => { ls.set(LS_ID, id); setHeroId(id); setParams({ id }, { replace: true }); window.scrollTo({ top: 0 }); };
+  const signIn = (id: string) => { setUnknown(null); ls.set(LS_ID, id); setHeroId(id); setParams({ id }, { replace: true }); window.scrollTo({ top: 0 }); };
   const signOut = () => { ls.set(LS_ID, null); setHeroId(null); setParams({}, { replace: true }); };
 
   return (
     <CitizenShell>
       <style>{CSS}</style>
-      {heroId ? <HeroApp key={heroId} id={heroId} onSignOut={signOut} /> : <Picker onPick={signIn} />}
+      {heroId ? <HeroApp key={heroId} id={heroId} focus={focus} onSignOut={signOut} onUnknown={() => { setUnknown(heroId); signOut(); }} />
+        : <Picker onPick={signIn} unknown={unknown} liveId={liveHero?.heroId ?? null} />}
     </CitizenShell>
   );
 }
 
 /* ================================================================ HERO APP */
-function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
+function HeroApp({ id, focus, onSignOut, onUnknown }: { id: string; focus: string | null; onSignOut: () => void; onUnknown: () => void }) {
   const toast = useToast();
-  const [inbox, reload, at] = usePoll(() => getInbox(id), 3000, [id]);
+  const [error, setError] = useState<string | null>(null);
+  const [inbox, reload, at] = usePoll(async () => {
+    try { return await getInboxStrict(id); }
+    catch (e) {
+      const m = String(e instanceof Error ? e.message : e);
+      if (m.startsWith("404")) {
+        // Live user whose server entry expired: re-register once, else ask to pick a hero.
+        const lv = getLiveHero();
+        if (lv && lv.heroId === id) { try { await goLive(lv); return await getInboxStrict(id); } catch { /* fall through */ } }
+        onUnknown();
+        return null;
+      }
+      return getInbox(id); // server down: demo fallback for reading only
+    }
+  }, 3000, [id]);
   const [heroes] = usePoll(getHeroes, 30000);
   const [override, setOverride] = useState<Record<string, VolunteerStatus>>({});
   const [dismissed, setDismissed] = useState<string[]>(() => JSON.parse(ls.get(`resq.hero.dismissed.${id}`) ?? "[]") as string[]);
@@ -92,7 +111,8 @@ function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
     return { ...j, volunteer: { ...j.volunteer, status } };
   }).filter((j) => j.volunteer.status !== "declined" && !dismissed.includes(j.incident.id)), [inbox, override, dismissed]);
 
-  const active = jobs.find((j) => ["accepted", "arrived", "cpr"].includes(j.volunteer.status)) ?? jobs.find((j) => j.volunteer.status === "done") ?? null;
+  const focused = focus ? jobs.find((j) => j.incident.id === focus && j.volunteer.status !== "alerted") : undefined;
+  const active = focused ?? jobs.find((j) => ["accepted", "arrived", "cpr"].includes(j.volunteer.status)) ?? jobs.find((j) => j.volunteer.status === "done") ?? null;
   const alerted = !active && available ? jobs.find((j) => j.volunteer.status === "alerted") ?? null : null;
   const pendingOffDuty = !available && jobs.some((j) => j.volunteer.status === "alerted");
 
@@ -110,9 +130,15 @@ function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
   async function act(job: HeroJob, action: HeroAction) {
     unlockAudio();
     setBusy(true);
-    setOverride((o) => ({ ...o, [job.incident.id]: AFTER[action] }));
-    const ok = await heroRespond(id, job.incident.id, action);
+    setError(null);
+    const err = await heroRespond(id, job.incident.id, action);
     setBusy(false);
+    if (err) {
+      setError(err);
+      toast("error", "Could not update — please try again", err);
+      return;
+    }
+    setOverride((o) => ({ ...o, [job.incident.id]: AFTER[action] }));
     const msg: Record<HeroAction, [string, string]> = {
       accept: ["You're on the way", "The caller and control room can see a CPR hero is coming."],
       decline: ["No problem", "We alerted the next nearest CPR hero."],
@@ -120,8 +146,7 @@ function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
       cpr: ["CPR started — push hard, push fast", "The control room sees survival odds rising."],
       done: ["Handed over to the ambulance", "Thank you. You gave them a fighting chance."],
     };
-    if (ok) toast(action === "decline" ? "info" : "success", ...msg[action]);
-    else toast("warning", "Offline — saved on this phone", "We'll sync when the network is back. Keep going.");
+    toast(action === "decline" ? "info" : "success", ...msg[action]);
     void reload();
   }
 
@@ -143,6 +168,13 @@ function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
   return (
     <>
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-5 md:py-8">
+        {error && (
+          <div role="alert" className="flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200">
+            <X className="mt-0.5 size-5 shrink-0" />
+            <span className="flex-1"><b>That didn't go through.</b> {error}</span>
+            <button type="button" onClick={() => setError(null)} className="text-xs font-semibold underline">Dismiss</button>
+          </div>
+        )}
         {!active && <HeroHeader hero={hero} available={available} onToggle={toggleAvailable} onSignOut={onSignOut}  />}
 
         {pendingOffDuty && (
@@ -619,7 +651,7 @@ function ThankYou({ job, hero, onClose }: { job: HeroJob; hero: HeroProfile; onC
 }
 
 /* ================================================================= PICKER */
-function Picker({ onPick }: { onPick: (id: string) => void }) {
+function Picker({ onPick, unknown, liveId }: { onPick: (id: string) => void; unknown: string | null; liveId: string | null }) {
   const [heroes] = usePoll(getHeroes, 30000);
   return (
     <div className="mx-auto max-w-2xl px-4 py-5 md:py-8">
@@ -630,6 +662,18 @@ function Picker({ onPick }: { onPick: (id: string) => void }) {
         <p className="relative mt-2 max-w-md text-white/90">Trained citizens within 3 km get alerted the moment someone collapses — and start CPR minutes before the ambulance arrives.</p>
       </div>
 
+      {unknown && (
+        <div role="alert" className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <b>This hero is not registered — choose a hero.</b> <span className="text-amber-800">({unknown} was not found on the server. Turn on hero alerts on the Home page, or pick a demo hero below.)</span>
+        </div>
+      )}
+      {liveId && (
+        <button type="button" onClick={() => onPick(liveId)} className="mt-4 flex w-full items-center gap-3 rounded-2xl bg-emerald-50 p-4 text-left ring-1 ring-emerald-200">
+          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white uppercase">live</span>
+          <span className="flex-1 text-sm font-semibold text-emerald-900">Continue as you ({liveId})</span>
+          <ChevronRight className="size-4 text-emerald-700" />
+        </button>
+      )}
       <div className="mt-6 mb-3 flex items-end justify-between">
         <div>
           <h2 className="font-display text-lg font-bold text-slate-900 dark:text-white">Sign in as hero <span className="font-normal text-slate-400">(demo)</span></h2>
@@ -643,7 +687,7 @@ function Picker({ onPick }: { onPick: (id: string) => void }) {
             className="group flex items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-[0_4px_20px_-12px_rgba(15,23,42,.2)] ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-lg hover:ring-red-200 dark:bg-slate-900 dark:ring-slate-800">
             <Avatar name={h.name} className="size-12 text-base" />
             <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white"><span className="truncate">{h.name}</span>{h.verified && <BadgeCheck className="size-4 shrink-0 text-emerald-600" />}</p>
+              <p className="flex items-center gap-1.5 font-semibold text-slate-900 dark:text-white"><span className="truncate">{h.name}</span>{h.verified && <BadgeCheck className="size-4 shrink-0 text-emerald-600" />}{h.live && <span className="rounded-full bg-emerald-600 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">live</span>}</p>
               <SkillChips skills={h.skills} className="mt-1" />
             </div>
             <div className="shrink-0 text-right">

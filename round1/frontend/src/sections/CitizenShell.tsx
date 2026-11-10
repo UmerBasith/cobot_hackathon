@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { BrandMark, NAVY } from "./Logo";
+import { HeroAlertWatcher, HeroToggle } from "./HeroLive";
 
 export const RED = "#e53935";
 
@@ -124,6 +125,7 @@ export function CitizenShell({ children }: { children: ReactNode }) {
                 <Link to="/responder" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"><Truck className="size-5 text-slate-400" />Responder</Link>
                 <Link to="/about" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"><Info className="size-5 text-slate-400" />About ResQNet</Link>
               </nav>
+              <HeroToggle />
               <a href="tel:112" className="mt-auto flex items-center justify-center gap-2 rounded-xl py-3 font-semibold text-white" style={{ background: RED }}><Phone className="size-4" />Call 112</a>
             </motion.aside>
           </>
@@ -131,6 +133,7 @@ export function CitizenShell({ children }: { children: ReactNode }) {
       </AnimatePresence>
 
       <div className="pb-24 md:pb-0">{children}</div>
+      <HeroAlertWatcher />
 
       <footer className="hidden border-t border-slate-200 bg-white md:block dark:border-slate-800 dark:bg-slate-950">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-sm text-slate-500">

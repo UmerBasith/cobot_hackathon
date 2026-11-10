@@ -18,6 +18,7 @@ import { distanceKm, useLiveLocation } from "@/lib/useLiveLocation";
 import { nearestArea } from "@/lib/geo";
 import type { Alert, Incident, Shelter } from "@/lib/mock";
 import { cn } from "@/lib/cn";
+import { HeroOptInCard } from "@/sections/HeroLive";
 
 const BLUE = "#1e40af";
 const PHOTO = "/images/chennai-central.webp";
@@ -188,6 +189,11 @@ export default function Home() {
             </Link>
           ))}
         </div>
+      </section>
+
+      {/* ------------------------------------------------- CPR HERO OPT-IN (live) */}
+      <section id="hero-optin" className="mx-auto max-w-7xl scroll-mt-20 px-4 pb-4 md:px-6">
+        <HeroOptInCard className="md:max-w-2xl" />
       </section>
 
       {/* ------------------------------------------------- CPR HERO NETWORK CTA */}

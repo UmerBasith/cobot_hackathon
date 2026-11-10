@@ -11,6 +11,8 @@ export const getGHSimulation = () => withFallback(api.get<GHSimulation>("/golden
 export const applyGoldenHour = () => api.post<GHApplyOut>("/golden-hour/apply");
 export const getSurvival = (id: string) => withFallback(api.get<SurvivalOut>(`/incidents/${enc(id)}/survival`), mockSurvival(id));
 export const getIncidentHeroes = (id: string) => withFallback(api.get<IncidentHeroes>(`/incidents/${enc(id)}/heroes`), mockIncidentHeroes(id));
+export const sendHero = (id: string, heroId: string) =>
+  api.post<{ alerted: string[]; incident: Incident }>(`/incidents/${enc(id)}/heroes/send?hero_id=${enc(heroId)}`);
 export const alertHeroes = (id: string, count = 3) =>
   api.post<{ alerted: string[]; incident: Incident }>(`/incidents/${enc(id)}/heroes/alert?count=${count}`);
 

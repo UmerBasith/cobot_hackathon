@@ -393,10 +393,10 @@ export interface SurvivalOut {
 export type HeroStatus = "alerted" | "accepted" | "declined" | "arrived" | "cpr" | "done";
 export interface HeroVolunteer {
   id: string; name: string; skills: string[]; status: HeroStatus; distance_m: number; eta_min: number;
-  alerted_at: string; updated_at: string; cpr_at: string | null;
+  alerted_at: string; updated_at: string; cpr_at: string | null; live?: boolean;
 }
-export interface NearbyHero { id: string; name: string; skills: string[]; distance_m: number; eta_min: number; status: HeroStatus | "not alerted" }
-export interface IncidentHeroes { needs_heroes: boolean; radius_m: number; responding: HeroVolunteer[]; nearby: NearbyHero[] }
+export interface NearbyHero { id: string; name: string; skills: string[]; distance_m: number; eta_min: number; status: HeroStatus | "not alerted"; live?: boolean }
+export interface IncidentHeroes { needs_heroes: boolean; radius_m: number; responding: HeroVolunteer[]; nearby: NearbyHero[]; busy?: string[] }
 
 export const SURVIVAL_PROFILES: Record<SurvivalProfile, { label: string; half: number; slow: number; basis: string }> = {
   cardiac: { label: "Cardiac arrest / not breathing", half: 7, slow: 3, basis: "Survival falls about 10 % per minute without CPR; CPR slows the fall." },

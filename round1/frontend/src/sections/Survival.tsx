@@ -12,7 +12,7 @@ import {
 } from "recharts";
 import { ArrowRight, BellRing, ExternalLink, HeartHandshake, HeartPulse, MapPin, ShieldCheck, Timer, Users } from "lucide-react";
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Skeleton, useToast } from "@/ui";
-import { alertHeroes, fmtLoss, getGoldenHour, getIncidentHeroes, getSurvival, pct, survColor } from "@/lib/golden";
+import { alertHeroes, sendHero, fmtLoss, getGoldenHour, getIncidentHeroes, getSurvival, pct, survColor } from "@/lib/golden";
 import { errText } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { STATIC } from "@/lib/static";
@@ -172,8 +172,9 @@ export const HERO_META: Record<HeroStatus | "not alerted", { label: string; tone
 const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 const dist = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 
-function HeroRow({ id, name, skills, distance_m, eta_min, status, compact }: {
+function HeroRow({ id, name, skills, distance_m, eta_min, status, compact, live, busy, sending, onSend }: {
   id: string; name: string; skills: string[]; distance_m: number; eta_min: number; status: HeroStatus | "not alerted"; compact?: boolean;
+  live?: boolean; busy?: boolean; sending?: boolean; onSend?: () => void;
 }) {
   const m = HERO_META[status];
   return (
@@ -182,6 +183,9 @@ function HeroRow({ id, name, skills, distance_m, eta_min, status, compact }: {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate text-sm font-semibold">{name}</p>
+          {live && <Badge tone="green" dot pulse={!STATIC}>LIVE user</Badge>}
+          {compact && status !== "not alerted" && <Badge tone={m.tone}>{m.label}</Badge>}
+          {compact && busy && status === "not alerted" && <Badge tone="gray">busy</Badge>}
           {!compact && <Badge tone={m.tone} dot pulse={m.pulse && !STATIC}>{m.label}</Badge>}
         </div>
         <div className="mt-1 flex flex-wrap gap-1">
@@ -191,6 +195,11 @@ function HeroRow({ id, name, skills, distance_m, eta_min, status, compact }: {
       <div className="shrink-0 text-right text-xs">
         <p className="font-semibold tabular-nums">{dist(distance_m)}</p>
         <p className="text-muted">~{Math.max(1, Math.round(eta_min))} min</p>
+        {onSend && (
+          <button type="button" disabled={sending} onClick={onSend} className="mt-1 inline-flex items-center gap-1 rounded-lg bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-red-500 disabled:opacity-60">
+            <BellRing className="size-3" />{sending ? "…" : "Send"}
+          </button>
+        )}
         {!compact && (
           <Link to={`/hero?id=${id}`} target="_blank" className="mt-0.5 inline-flex items-center gap-0.5 font-medium text-red-600 hover:underline dark:text-red-400" title="Open this hero's phone app (demo)">
             Hero app<ExternalLink className="size-3" />
@@ -203,8 +212,19 @@ function HeroRow({ id, name, skills, distance_m, eta_min, status, compact }: {
 
 export function HeroCard({ incidentId, className }: { incidentId: string; className?: string }) {
   const toast = useToast();
-  const [h, reload] = usePoll<IncidentHeroes>(() => getIncidentHeroes(incidentId), 5000, [incidentId]);
+  const [h, reload] = usePoll<IncidentHeroes>(() => getIncidentHeroes(incidentId), 3000, [incidentId]);
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
+
+  async function sendOne(heroId: string, name: string) {
+    setSending(heroId);
+    try {
+      await sendHero(incidentId, heroId);
+      toast("success", `Alert sent to ${name}`, "Their phone is ringing now.");
+      await reload();
+    } catch (e) { toast("warning", `Could not alert ${name}`, errText(e)); }
+    finally { setSending(null); }
+  }
 
   async function alertNow() {
     setBusy(true);
@@ -216,18 +236,21 @@ export function HeroCard({ incidentId, className }: { incidentId: string; classN
       await reload();
     } catch (e) {
       const msg = String(e instanceof Error ? e.message : e);
-      if (msg.startsWith("409")) toast("warning", "No more heroes within 3 km", "Every available trained citizen nearby is already alerted.");
+      if (msg.startsWith("409")) toast("warning", "No more heroes to alert", errText(e));
       else toast("error", "Could not alert heroes", errText(e));
     } finally { setBusy(false); }
   }
 
-  const free = (h?.nearby ?? []).filter((n) => n.status === "not alerted");
+  const busyIds = new Set(h?.busy ?? []);
+  const free = (h?.nearby ?? []).filter((n) => n.status === "not alerted" && !busyIds.has(n.id));
+  const others = (h?.nearby ?? []).filter((n) => !(h?.responding ?? []).some((v) => v.id === n.id));
+  const far = (h?.responding ?? []).some((v) => v.distance_m > 3000);
   const active = (h?.responding ?? []).filter((v) => v.status !== "declined");
   const onScene = active.filter((v) => v.status === "arrived" || v.status === "cpr").length;
 
   return (
     <Card className={cn("flex flex-col rounded-2xl", className)}>
-      <CardHeader title="CPR Hero Network" subtitle="Trained citizens within 3 km" icon={HeartHandshake}
+      <CardHeader title="CPR Hero Network" subtitle={far ? "Search widened beyond 3 km" : "Trained citizens within 3 km"} icon={HeartHandshake}
         action={h && active.length > 0 ? <Badge tone={onScene ? "green" : "amber"} dot pulse={!STATIC}>{onScene ? `${onScene} on scene` : `${active.length} responding`}</Badge> : undefined} />
       <CardBody className="flex flex-1 flex-col gap-3">
         <p className="rounded-xl bg-red-50/70 px-3 py-2 text-xs text-red-800 dark:bg-red-950/30 dark:text-red-200">
@@ -245,15 +268,19 @@ export function HeroCard({ incidentId, className }: { incidentId: string; classN
               <span className="text-muted">{h.needs_heroes ? "No hero alerted yet — alert the nearest trained citizens." : "No life threat reported. Heroes can still be alerted for first aid."}</span>
             </div>
           )}
-          {free.length > 0 && (
+          {others.length > 0 && (
             <div className="space-y-2">
-              <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted"><MapPin className="size-3" />Nearby, not alerted</p>
-              {free.slice(0, 3).map((n) => <HeroRow key={n.id} {...n} compact />)}
-              {free.length > 3 && <p className="text-xs text-muted">+{free.length - 3} more within {h.radius_m / 1000} km</p>}
+              <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted"><MapPin className="size-3" />Nearest heroes · within 25 km</p>
+              <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                {others.map((n) => {
+                  const canSend = n.status === "not alerted" && !busyIds.has(n.id);
+                  return <HeroRow key={n.id} {...n} compact busy={busyIds.has(n.id)} sending={sending === n.id} onSend={canSend ? () => sendOne(n.id, n.name) : undefined} />;
+                })}
+              </div>
             </div>
           )}
-          <Button icon={BellRing} loading={busy} disabled={!free.length} onClick={alertNow} className="mt-auto w-full bg-red-600 hover:bg-red-500">
-            {free.length ? `Alert ${Math.min(3, free.length)} nearest hero${Math.min(3, free.length) === 1 ? "" : "es"}` : "No more heroes within 3 km"}
+          <Button icon={BellRing} loading={busy} onClick={alertNow} className="mt-auto w-full bg-red-600 hover:bg-red-500">
+            {free.length ? `Alert ${Math.min(3, free.length)} nearest hero${Math.min(3, free.length) === 1 ? "" : "es"}` : "Alert next nearest heroes"}
           </Button>
         </>)}
       </CardBody>

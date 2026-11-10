@@ -1,5 +1,6 @@
 /** CPR Hero Network — types, demo-safe API calls and small audio helpers (owned by the hero builder). */
 import { api, withFallback } from "./api";
+import { errText } from "./resq";
 import type { Category, Severity, Status } from "./mock";
 
 export type VolunteerStatus = "alerted" | "accepted" | "declined" | "arrived" | "cpr" | "done";
@@ -7,11 +8,11 @@ export type HeroAction = "accept" | "decline" | "arrived" | "cpr" | "done";
 
 export interface HeroProfile {
   id: string; name: string; skills: string[]; lat: number; lng: number; phone: string;
-  available: boolean; verified: boolean; rescues: number;
+  available: boolean; verified: boolean; rescues: number; live?: boolean; last_seen?: string;
 }
 export interface Volunteer {
   id: string; name: string; skills: string[]; status: VolunteerStatus; distance_m: number; eta_min: number;
-  alerted_at: string; updated_at: string; cpr_at: string | null;
+  alerted_at: string; updated_at: string; cpr_at: string | null; live?: boolean;
 }
 export interface HeroIncident {
   id: string; title: string; category: Category; area: string; landmark: string; lat: number | null; lng: number | null;
@@ -61,10 +62,12 @@ export function mockInbox(id: string): HeroInbox {
 /* ------------------------------------------------------------------- API */
 export const getHeroes = () => withFallback(api.get<HeroProfile[]>("/heroes"), MOCK_HEROES);
 export const getInbox = (id: string) => withFallback(api.get<HeroInbox>(`/hero/${encodeURIComponent(id)}`), mockInbox(id));
-/** Returns true when the server accepted it, false when we only updated locally (offline demo). */
-export async function heroRespond(id: string, incident_id: string, action: HeroAction): Promise<boolean> {
-  try { await api.post(`/hero/${encodeURIComponent(id)}/respond`, { incident_id, action }); return true; }
-  catch (e) { console.warn("[hero] respond offline:", e); return false; }
+/** Real inbox read — throws (no mock) so a 404 / outage is visible. */
+export const getInboxStrict = (id: string) => api.get<HeroInbox>(`/hero/${encodeURIComponent(id)}`);
+/** Returns null on success, or the server's error message. Never pretends success. */
+export async function heroRespond(id: string, incident_id: string, action: HeroAction): Promise<string | null> {
+  try { await api.post(`/hero/${encodeURIComponent(id)}/respond`, { incident_id, action }); return null; }
+  catch (e) { return errText(e); }
 }
 
 /* ------------------------------------------------------------- formatting */

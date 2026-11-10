@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Bell, CircleCheck, CircleDot, Map as MapIcon, Navigation, Phone, PowerOff, RefreshCw, Repeat, Send, ShieldCheck, Siren, Truck, Users, Zap } from "lucide-react";
+import { ArrowRight, Bell, Plus, CircleCheck, CircleDot, Map as MapIcon, Navigation, Phone, PowerOff, RefreshCw, Repeat, Send, ShieldCheck, Siren, Truck, Users, Zap } from "lucide-react";
 import { Badge, Button, Card, CardBody, CardHeader, RingGauge, Select, Skeleton, Tabs, useToast } from "@/ui";
 import { TeamIcon } from "@/sections/Dispatch";
 import { LazyMap } from "@/sections/LazyMap";
 import { SEV_HEX } from "@/sections/IncidentUI";
+import { DeleteTeamModal, TeamAdminTable, TeamFormModal } from "@/sections/TeamAdmin";
+import { routeChip, toLines, useRoutes } from "@/lib/useRoutes";
 import { assignTeams, errText, getIncidents, getTeams } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import type { Incident, Severity, Team } from "@/lib/mock";
 
 export const ST_TONE = { available: "green", busy: "brand", offline: "gray" } as const;
-export const ST_LABEL = { available: "Available", busy: "Deployed", offline: "Offline" } as const;
+export const ST_LABEL = { available: "Available", busy: "Busy", offline: "Offline" } as const;
 export const P_OF: Record<Severity, string> = { Critical: "P1", High: "P2", Medium: "P3", Low: "P4" };
 const P_TONE = { Critical: "red", High: "amber", Medium: "blue", Low: "gray" } as const;
 type Tab = "live" | "teams" | "personnel" | "vehicles" | "equipment" | "schedules";
@@ -29,6 +31,9 @@ export default function Teams() {
   const [incId, setIncId] = useState("");
   const [pick, setPick] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [form, setForm] = useState<{ open: boolean; team: Team | null }>({ open: false, team: null });
+  const [delTeam, setDelTeam] = useState<Team | null>(null);
+  const reloadAll = () => { reloadTeams(); reloadList(); };
 
   const all = list ?? [];
   const open = all.filter((i) => i.status !== "Resolved");
@@ -42,6 +47,13 @@ export default function Teams() {
   const etaByTeam = new Map<string, number>();
   all.forEach((i) => i.assignments.forEach((a) => { if (a.status !== "completed" && a.status !== "rejected") etaByTeam.set(a.team_id, a.eta_min); }));
 
+  // Route visualisation: every busy team -> its incident (road route via OSRM, straight line offline)
+  const routeReqs = (teams ?? []).filter((t) => t.status === "busy" && t.current_incident).flatMap((t) => {
+    const i = all.find((x) => x.id === t.current_incident);
+    return i && i.lat != null && i.lng != null ? [{ id: t.id, from: { lat: t.lat, lng: t.lng }, to: { lat: i.lat, lng: i.lng }, label: `${t.name} → ${i.id}` }] : [];
+  });
+  const routes = useRoutes(routeReqs);
+
   async function dispatch() {
     if (!selInc) { toast("warning", "Pick an incident", "No open incident selected."); return; }
     if (!pick.length) { toast("warning", "Pick at least one team", "Select available teams to dispatch."); return; }
@@ -54,7 +66,7 @@ export default function Teams() {
   const kpis = [
     { label: "Total Teams", v: teams?.length ?? 0, icon: Users, c: "text-ink" },
     { label: "Available", v: count("available"), icon: CircleCheck, c: "text-emerald-600 dark:text-emerald-400" },
-    { label: "Deployed", v: count("busy"), icon: CircleDot, c: "text-brand-600 dark:text-brand-400" },
+    { label: "Busy", v: count("busy"), icon: CircleDot, c: "text-brand-600 dark:text-brand-400" },
     { label: "En Route", v: enRoute, icon: Navigation, c: "text-amber-600 dark:text-amber-400" },
     { label: "Offline", v: count("offline"), icon: PowerOff, c: "text-muted" },
   ];
@@ -66,9 +78,10 @@ export default function Teams() {
           <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-3xl">Response Team <span className="text-red-600 dark:text-red-400">Management</span></h1>
           <p className="mt-1 text-sm text-muted">Live team tracking, dispatch and operational readiness</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" icon={RefreshCw} onClick={() => { reloadTeams(); reloadList(); }}>Refresh</Button>
-          <Link to="/responder"><Button icon={Truck}>Responder app</Button></Link>
+        <div className="flex flex-wrap gap-2">
+          <Button icon={Plus} onClick={() => setForm({ open: true, team: null })} className="bg-red-600 text-white hover:bg-red-500">Add team</Button>
+          <Button variant="outline" icon={RefreshCw} onClick={reloadAll}>Refresh</Button>
+          <Link to="/responder"><Button variant="outline" icon={Truck}>Responder app</Button></Link>
         </div>
       </div>
 
@@ -91,17 +104,23 @@ export default function Teams() {
       {tab === "live" && (
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           <Card className="min-w-0 xl:col-span-2">
-            <CardHeader title="Live Map" subtitle="Teams (diamonds) and open incidents (dots)" icon={MapIcon}
+            <CardHeader title="Live Map · team routes" subtitle="Teams (diamonds), open incidents (dots), busy team → incident routes (blue)" icon={MapIcon}
               action={<div className="flex gap-1.5"><Badge tone="brand">Live Map</Badge><Link to="/admin/zones"><Badge tone="gray">Zones</Badge></Link></div>} />
             <CardBody>
-              <LazyMap height={400} points={points} teams={tpoints} onSelect={(id) => nav(`/admin/incidents/${id}`)} />
+              <LazyMap height={400} points={points} teams={tpoints} routes={toLines(routes)} onSelect={(id) => nav(`/admin/incidents/${id}`)} />
               <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted">
                 <span className="flex items-center gap-1"><span className="size-2.5 rotate-45 rounded-[2px] bg-[#2563eb]" />Available</span>
                 <span className="flex items-center gap-1"><span className="size-2.5 rotate-45 rounded-[2px] bg-[#7c3aed]" />Deployed</span>
                 <span className="flex items-center gap-1"><span className="size-2.5 rotate-45 rounded-[2px] bg-amber-500" />En Route</span>
                 <span className="flex items-center gap-1"><span className="size-2.5 rotate-45 rounded-[2px] bg-gray-400" />Offline</span>
                 <span className="flex items-center gap-1"><span className="size-2.5 rounded-full" style={{ background: SEV_HEX.Critical }} />Critical incident</span>
+                <span className="flex items-center gap-1"><span className="h-1 w-4 rounded bg-[#2563eb]" />Route (dashed = straight-line fallback)</span>
               </div>
+              {routes.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {routes.map((r) => <span key={r.id} className="inline-flex max-w-full items-center truncate rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-800 ring-1 ring-inset ring-blue-200 dark:bg-blue-950 dark:text-blue-200 dark:ring-blue-900"><span className="truncate">{r.label}: {routeChip(r).replace("Route: ", "")}</span></span>)}
+                </div>
+              )}
             </CardBody>
           </Card>
 
@@ -152,9 +171,10 @@ export default function Teams() {
           </Card>
 
           <Card className="min-w-0 xl:col-span-2">
-            <CardHeader title="Response Teams Overview" subtitle="Click a team for details" icon={Users} />
+            <CardHeader title="Team management" subtitle="Name/ID · category · location · availability · assigned incident" icon={Users}
+              action={<Button size="sm" icon={Plus} onClick={() => setForm({ open: true, team: null })}>Add team</Button>} />
             <CardBody>
-              {!teams ? <Skeleton className="h-60" /> : <TeamTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/admin/teams/${id}`)} />}
+              {!teams ? <Skeleton className="h-60" /> : <TeamAdminTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/admin/teams/${id}`)} onEdit={(t) => setForm({ open: true, team: t })} onDelete={setDelTeam} onChanged={reloadAll} />}
             </CardBody>
           </Card>
 
@@ -183,8 +203,8 @@ export default function Teams() {
       )}
 
       {tab === "teams" && (
-        <Card className="mt-4"><CardHeader title="All teams" subtitle="Click a team for details" icon={Users} />
-          <CardBody>{!teams ? <Skeleton className="h-60" /> : <TeamTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/admin/teams/${id}`)} />}</CardBody></Card>
+        <Card className="mt-4"><CardHeader title="All teams" subtitle="Click a team for details" icon={Users} action={<Button size="sm" icon={Plus} onClick={() => setForm({ open: true, team: null })}>Add team</Button>} />
+          <CardBody>{!teams ? <Skeleton className="h-60" /> : <TeamAdminTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/admin/teams/${id}`)} onEdit={(t) => setForm({ open: true, team: t })} onDelete={setDelTeam} onChanged={reloadAll} />}</CardBody></Card>
       )}
 
       {tab !== "live" && tab !== "teams" && (
@@ -200,11 +220,14 @@ export default function Teams() {
           </CardBody>
         </Card>
       )}
+
+      <TeamFormModal open={form.open} team={form.team} onClose={() => setForm({ open: false, team: null })} onSaved={reloadAll} />
+      <DeleteTeamModal team={delTeam} onClose={() => setDelTeam(null)} onDeleted={reloadAll} />
     </>
   );
 }
 
-function TeamTable({ teams, eta, onOpen }: { teams: Team[]; eta: Map<string, number>; onOpen: (id: string) => void }) {
+export function TeamTable({ teams, eta, onOpen }: { teams: Team[]; eta: Map<string, number>; onOpen: (id: string) => void }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-line">
       <table className="w-full min-w-[620px] text-sm">

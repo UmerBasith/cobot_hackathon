@@ -36,7 +36,7 @@ export const features: { icon: LucideIcon; title: string; text: string }[] = [
   { icon: Gauge, title: "Explainable severity", text: "Score 0–100 with every reason shown, e.g. “People trapped +35”. No black box." },
   { icon: ListOrdered, title: "Ranked live queue", text: "Critical first, then score, then oldest. Critical incidents pulse red at the top." },
   { icon: MapPinned, title: "Live incident map", text: "Every report on a Chennai map, coloured by severity. Click a dot to act." },
-  { icon: ClipboardCheck, title: "Track to resolution", text: "Reported → Pending → In Progress → Resolved, with notes and a full timeline." },
+  { icon: ClipboardCheck, title: "Track to resolution", text: "Reported → Pending → Assigned → In Progress → Resolved, with notes and a full timeline." },
   { icon: PhoneCall, title: "Supports 112, never replaces it", text: "A red “Call 112” button is always one tap away on every screen." },
 ];
 

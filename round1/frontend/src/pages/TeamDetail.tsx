@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Activity, ArrowLeft, Award, Clock, History, Search, Send, Settings2, ShieldCheck, Truck, Users, Wrench } from "lucide-react";
+import { Activity, ArrowLeft, Award, Clock, History, MapPin, Pencil, Route, Search, Send, Settings2, ShieldCheck, Trash2, Truck, Users, Wrench } from "lucide-react";
 import { Badge, Button, Card, CardBody, CardHeader, Input, Select, Skeleton, Tabs, useToast } from "@/ui";
 import { TeamIcon } from "@/sections/Dispatch";
-import { assignTeams, errText, getIncidents, getTeams } from "@/lib/resq";
+import { assignTeams, errText, getIncidents, getTeams, patchTeam } from "@/lib/resq";
+import { AVAIL_LABEL, AvailabilitySelect, DeleteTeamModal, TeamFormModal, crewSize } from "@/sections/TeamAdmin";
+import { LazyMap } from "@/sections/LazyMap";
+import { routeChip, toLines, useRoutes } from "@/lib/useRoutes";
 import { usePoll } from "@/lib/usePoll";
 import type { Incident, Team, TeamStatus } from "@/lib/mock";
 import { P_OF, ST_LABEL, ST_TONE, hashId } from "@/pages/Teams";
@@ -30,12 +33,13 @@ export default function TeamDetail() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const toast = useToast();
-  const [teams] = usePoll<Team[]>(getTeams);
+  const [teams, reloadTeams] = usePoll<Team[]>(getTeams);
   const [list, reloadList] = usePoll<Incident[]>(() => getIncidents());
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<Tab>("overview");
-  const [localStatus, setLocalStatus] = useState<Record<string, string>>({});
-  const [stSel, setStSel] = useState("");
+  const [edit, setEdit] = useState(false);
+  const [del, setDel] = useState<Team | null>(null);
+  const [ctl, setCtl] = useState<string | null>(null);
   const [deployTo, setDeployTo] = useState("");
   const [showDeploy, setShowDeploy] = useState(false);
 
@@ -48,12 +52,23 @@ export default function TeamDetail() {
   const sla = history.length ? Math.round((history.filter((h) => h.a.eta_min <= 15).length / history.length) * 100) : 100;
   const shown = (teams ?? []).filter((t) => (t.id + t.name + t.type_label).toLowerCase().includes(q.toLowerCase()));
 
-  if (!teams || !team || !d) return <Skeleton className="h-[600px] rounded-2xl" />;
-  const status = localStatus[team.id] ?? ST_LABEL[team.status];
-  const tone = (status === "Available" || status === "Ready") ? "green" : status === "Offline" ? "gray" : status === "Maintenance" ? "amber" : "brand";
-  const readiness = Math.round((d.onDuty / d.total) * 100);
+  const curInc = (list ?? []).find((i) => i.id === team?.current_incident);
+  const routes = useRoutes(team && curInc && curInc.lat != null && curInc.lng != null && team.status === "busy"
+    ? [{ id: team.id, from: { lat: team.lat, lng: team.lng }, to: { lat: curInc.lat, lng: curInc.lng }, label: team.name }] : []);
 
-  function setLocal(s: string) { setLocalStatus({ ...localStatus, [team!.id]: s }); toast("success", `${team!.id} → ${s}`, "Demo control · local only"); }
+  if (!teams || !team || !d) return <Skeleton className="h-[600px] rounded-2xl" />;
+  const status = ST_LABEL[team.status];
+  const tone = ST_TONE[team.status];
+  const crew = crewSize(team);
+  const readiness = team.status === "offline" ? 0 : Math.round((Math.min(crew, d.total) / d.total) * 100);
+  const reloadAll = () => { reloadTeams(); reloadList(); };
+
+  async function setAvail(s: TeamStatus) {
+    setCtl(s);
+    try { await patchTeam(team!.id, { status: s }); toast("success", `${team!.name} → ${AVAIL_LABEL[s]}`, "Saved to server"); reloadAll(); }
+    catch (e) { toast("error", "Could not change availability", errText(e)); }
+    finally { setCtl(null); }
+  }
   async function deploy() {
     const target = deployTo || open[0]?.id;
     if (!target) { toast("warning", "No open incident", "Nothing to deploy to."); return; }
@@ -62,7 +77,7 @@ export default function TeamDetail() {
   }
 
   const tiles = [
-    { k: "Personnel", v: `${d.onDuty}/${d.total}`, icon: Users },
+    { k: "Crew", v: `${crew}`, icon: Users },
     { k: "Vehicles", v: `${d.vehicles.length}`, icon: Truck },
     { k: "Equipment", v: `${d.equip.reduce((s, e) => s + e.v, 0)}`, icon: Wrench },
     { k: "Certifications", v: `${d.certs.length}`, icon: Award },
@@ -96,9 +111,10 @@ export default function TeamDetail() {
             <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">{team.name} · {team.station} <Badge tone={tone} dot>{status}</Badge></p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select className="w-40" value={stSel || status} onChange={(e) => setStSel(e.target.value)}
-              options={["Available", "Ready", "Deployed", "Maintenance", "Offline"].map((s) => ({ value: s, label: s }))} />
-            <Button variant="outline" onClick={() => setLocal(stSel || status)}>Update Status</Button>
+            <span className="text-xs font-medium text-muted">Availability</span>
+            <AvailabilitySelect team={team} onDone={reloadAll} className="h-10 px-3 text-sm" />
+            <Button variant="outline" icon={Pencil} onClick={() => setEdit(true)}>Edit</Button>
+            <Button variant="outline" icon={Trash2} className="text-red-600" onClick={() => setDel(team)}>Delete</Button>
             <Button className="bg-red-600 hover:bg-red-700" icon={Send} onClick={() => setShowDeploy(!showDeploy)}>Deploy Team</Button>
           </div>
         </div>
@@ -110,6 +126,32 @@ export default function TeamDetail() {
             <Button className="bg-red-600 hover:bg-red-700" icon={Send} onClick={deploy}>Confirm</Button>
           </CardBody></Card>
         )}
+
+        <Card className="min-w-0">
+          <CardHeader title="Team profile" subtitle="Live from the server" icon={ShieldCheck} />
+          <CardBody className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              {[
+                ["Team name / ID", <><span className="block font-medium">{team.name}</span><span className="font-mono text-xs text-muted">{team.id}</span></>],
+                ["Category", team.type_label],
+                ["Current location", <><span className="block font-medium">{team.station}</span><span className="font-mono text-xs text-muted">{team.lat.toFixed(4)}, {team.lng.toFixed(4)}</span></>],
+                ["Availability", <Badge tone={tone} dot pulse={team.status === "busy"}>{status}</Badge>],
+                ["Assigned incident", team.current_incident ? <Link to={`/admin/incidents/${team.current_incident}`} className="font-mono font-semibold text-red-600 hover:underline dark:text-red-400">{team.current_incident}</Link> : <span className="text-muted">None</span>],
+                ["Crew", `${crew} responders`],
+              ].map(([k, v]) => (
+                <div key={k as string} className="min-w-0 rounded-xl bg-surface-2 p-3"><dt className="text-xs text-muted">{k}</dt><dd className="mt-0.5 min-w-0 break-words">{v}</dd></div>
+              ))}
+            </dl>
+            <div className="relative min-w-0">
+              <LazyMap height={230} teams={[{ id: team.id, lat: team.lat, lng: team.lng, label: team.name, status: team.status }]}
+                points={curInc && curInc.lat != null && curInc.lng != null ? [{ id: curInc.id, lat: curInc.lat, lng: curInc.lng, severity: curInc.severity, title: curInc.title }] : []}
+                routes={toLines(routes)} onSelect={(iid) => nav(`/admin/incidents/${iid}`)} />
+              <span className="pointer-events-none absolute left-2 top-2 z-10 inline-flex max-w-[calc(100%-1rem)] items-center gap-1.5 truncate rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold shadow dark:bg-neutral-900/90">
+                {routes[0] ? <><Route className="size-3.5 shrink-0 text-blue-600" /><span className="truncate">{routeChip(routes[0])}</span></> : <><MapPin className="size-3.5 shrink-0 text-red-600" />At station · {team.station}</>}
+              </span>
+            </div>
+          </CardBody>
+        </Card>
 
         <div className="overflow-x-auto"><Tabs<Tab> value={tab} onChange={setTab} tabs={[
           { value: "overview", label: "Teams Overview" }, { value: "mgmt", label: "Team Management" }, { value: "shift", label: "Shift & Roster" },
@@ -182,15 +224,17 @@ export default function TeamDetail() {
             </CardBody></Card>
           )}
           {(tab === "overview" || tab === "mgmt") && (
-            <Card><CardHeader title="Team Controls" subtitle="demo · local only" icon={Settings2} /><CardBody className="grid grid-cols-2 gap-2">
-              <Button variant="outline" onClick={() => setLocal("Ready")}>Set Ready</Button>
-              <Button variant="outline" onClick={() => setLocal("Deployed")}>On Deployment</Button>
-              <Button variant="outline" onClick={() => setLocal("Maintenance")}>Maintenance</Button>
-              <Button variant="outline" onClick={() => setLocal("Offline")}>Mark Offline</Button>
+            <Card><CardHeader title="Team Controls" subtitle="Saved to server (PATCH /api/teams)" icon={Settings2} /><CardBody className="grid grid-cols-2 gap-2">
+              <Button variant="outline" disabled={team.status === "available"} loading={ctl === "available"} onClick={() => setAvail("available")}>Set Available</Button>
+              <Button variant="outline" disabled={team.status === "busy"} loading={ctl === "busy"} onClick={() => setAvail("busy")}>Set Busy</Button>
+              <Button variant="outline" disabled={team.status === "offline"} loading={ctl === "offline"} onClick={() => setAvail("offline")}>Mark Offline</Button>
+              <Button variant="outline" icon={Pencil} onClick={() => setEdit(true)}>Edit details</Button>
             </CardBody></Card>
           )}
         </div>
       </div>
+      <TeamFormModal open={edit} team={team} onClose={() => setEdit(false)} onSaved={reloadAll} />
+      <DeleteTeamModal team={del} onClose={() => setDel(null)} onDeleted={() => { reloadAll(); nav("/admin/teams"); }} />
     </div>
   );
 }

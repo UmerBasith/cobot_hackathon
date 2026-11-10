@@ -12,6 +12,7 @@ import {
 import { Button, Card, EmptyState, Skeleton, Textarea, useToast } from "@/ui";
 import { CATEGORY_META, CategoryIcon, ReasonsList } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
+import { routeChip, toLines, useRoutes } from "@/lib/useRoutes";
 import { assignmentStatus, errText, escalateAssignment, fieldUpdate, getActiveAlerts, getIncidents, getResponderJobs, getTeams, respondAssignment, timeAgo, type FieldTag, type NeedType } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { fmtTime } from "@/lib/format";
@@ -161,6 +162,8 @@ function CurrentJob({ job, team, onChange, compact }: { job: ResponderJob; team?
     catch (e) { toast("error", "Action failed", errText(e)); }
     finally { setBusy(null); }
   }
+  const routes = useRoutes(team && i.lat != null && i.lng != null && a.status !== "completed" && a.status !== "rejected"
+    ? [{ id: a.id, from: { lat: team.lat, lng: team.lng }, to: { lat: i.lat, lng: i.lng }, label: team.name }] : []);
   const nav = i.lat != null ? `https://www.google.com/maps/dir/?api=1&destination=${i.lat},${i.lng}` : null;
   const eta = Math.max(1, Math.round(a.eta_min));
   const sevTone = i.severity === "Critical" ? "bg-red-600 text-white" : i.severity === "High" ? "bg-orange-500 text-white" : i.severity === "Medium" ? "bg-amber-400 text-amber-950" : "bg-emerald-500 text-white";
@@ -240,12 +243,12 @@ function CurrentJob({ job, team, onChange, compact }: { job: ResponderJob; team?
         {header}
         <Card className="overflow-hidden p-0">
           <div className="flex items-center justify-between px-5 py-3">
-            <p className="font-semibold">Route to Incident</p>
+            <div className="min-w-0"><p className="font-semibold">Route to Incident</p>{routes[0] && <p className="truncate text-xs text-blue-700 dark:text-blue-300">{routeChip(routes[0])}</p>}</div>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white dark:bg-surface-2"><Truck className="size-3.5" />{eta} min · {a.distance_km} km</span>
           </div>
           {i.lat != null && i.lng != null
             ? <LazyMap height={300} points={[{ id: i.id, lat: i.lat, lng: i.lng, severity: i.severity, title: i.title }]}
-                teams={team ? [{ id: team.id, lat: team.lat, lng: team.lng, label: team.name, status: team.status }] : undefined} />
+                teams={team ? [{ id: team.id, lat: team.lat, lng: team.lng, label: team.name, status: team.status }] : undefined} routes={toLines(routes)} />
             : <div className="grid h-40 place-items-center text-sm text-slate-500">No GPS location for this incident</div>}
         </Card>
         <Card id="r-details" className="scroll-mt-20 p-5">

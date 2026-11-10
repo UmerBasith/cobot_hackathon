@@ -584,11 +584,11 @@ function VoicePanel({ onParsed }: { onParsed: (p: ParseOut, text: string, how: "
       <div className="flex flex-wrap items-center gap-3">
         <button type="button" disabled={parsing || !supported} onClick={() => (sp.listening ? sp.stop() : sp.listen(lang))}
           aria-label={sp.listening ? "Stop listening" : "Speak your emergency"}
-          className={cn("relative flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl px-4 text-[15px] font-semibold text-white transition active:scale-[.99] disabled:opacity-60",
+          className={cn("relative flex h-14 min-w-0 flex-1 basis-full sm:basis-auto items-center justify-center gap-2.5 rounded-xl px-4 text-[15px] font-semibold text-white transition active:scale-[.99] disabled:opacity-60",
             sp.listening ? "bg-[#0f1f3d]" : "bg-[#e53935] shadow-[0_10px_24px_-8px_rgba(229,57,53,.6)] hover:bg-[#d32f2f]")}>
           {sp.listening && <span className="absolute inset-0 animate-pulse rounded-xl ring-4 ring-red-300/60" />}
           {parsing ? <span className="size-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : sp.listening ? <Square className="size-4 fill-current" /> : <Mic className="size-5" />}
-          <span className="truncate">{parsing ? "Understanding…" : sp.listening ? "Listening… tap to stop" : "🎤 Speak your emergency"}</span>
+          <span className="truncate">{parsing ? "Understanding…" : sp.listening ? "Listening… tap to stop" : "Speak your emergency"}</span>
         </button>
         <div className="inline-flex shrink-0 rounded-xl bg-white p-1 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" role="group" aria-label="Voice language">
           {([["en-IN", "English"], ["ta-IN", "தமிழ்"]] as const).map(([v, l]) => (
@@ -613,7 +613,7 @@ function VoicePanel({ onParsed }: { onParsed: (p: ParseOut, text: string, how: "
             placeholder={lang === "ta-IN" ? "வேளச்சேரியில் வெள்ளம், குழந்தைகள் சிக்கி இருக்காங்க" : "Type it instead — e.g. flood in Velachery, 4 children stuck"}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); run(typed, "typed"); } }}
             className="min-w-0 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#0f1f3d] outline-none placeholder:text-slate-400 focus:border-[#e53935] focus:ring-4 focus:ring-red-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
-          <button type="button" disabled={parsing || typed.trim().length < 3} onClick={() => run(typed, "typed")}
+          <button type="button" aria-label="Fill form" disabled={parsing || typed.trim().length < 3} onClick={() => run(typed, "typed")}
             className="flex shrink-0 items-center gap-1.5 self-stretch rounded-xl bg-[#0f1f3d] px-3.5 text-sm font-semibold text-white disabled:opacity-40">
             <Sparkles className="size-4" /><span className="hidden min-[400px]:inline">Fill form</span>
           </button>

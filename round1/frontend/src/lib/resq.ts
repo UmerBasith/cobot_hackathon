@@ -31,6 +31,11 @@ export const getResponderJobs = (teamId: string) => withFallback(api.get<Respond
 export const assignTeams = (id: string, team_ids: string[]) => api.post<Incident>(`/incidents/${enc(id)}/assign`, { team_ids });
 export const respondAssignment = (id: string, accept: boolean, reason = "") => api.post<Incident>(`/assignments/${enc(id)}/respond`, { accept, reason });
 export const assignmentStatus = (id: string, status: "en_route" | "on_scene" | "completed", note = "") => api.post<Incident>(`/assignments/${enc(id)}/status`, { status, note });
+/** Responder quick actions: field situation report, and escalation (needs more help). */
+export type FieldTag = "situation" | "contained" | "rescued" | "need_time" | "casualty";
+export type NeedType = "fire" | "rescue" | "ambulance" | "police" | "ndrf" | "boat" | "hazmat" | "power";
+export const fieldUpdate = (id: string, note: string, tag: FieldTag = "situation") => api.post<Incident>(`/assignments/${enc(id)}/update`, { note, tag });
+export const escalateAssignment = (id: string, reason: string, needs: NeedType[], note = "") => api.post<Incident>(`/assignments/${enc(id)}/escalate`, { reason, needs, note });
 export const createAlert = (a: { area: string; message: string; level: AlertLevel; hours: number }) => api.post<Alert>("/alerts", a);
 export const simulateFlood = () => api.post<{ ok: boolean; created: string[] }>("/simulate", { scenario: "chennai_flood" });
 export const resetDemo = () => api.post<{ ok: boolean; incidents: number }>("/reset");

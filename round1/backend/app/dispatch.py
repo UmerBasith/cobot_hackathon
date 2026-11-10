@@ -114,6 +114,16 @@ def escalations(incidents: list[dict], teams: list[dict]) -> list[dict]:
         elif inc["severity"] == "High" and waited > 5:
             out.append({"level": "warning", "incident_id": inc["id"],
                         "message": f"{inc['id']} High · {inc['title']} — waiting {int(waited)} min for a team"})
+    # responder escalations from the field stay critical until the control room sends another team
+    for e_inc in incidents:
+        esc = e_inc.get("escalation")
+        if not esc or e_inc["status"] == "Resolved":
+            continue
+        if len(e_inc.get("assignments", [])) > esc.get("teams_at", 10**6):
+            continue
+        needs = ", ".join(esc.get("needs") or []) or "more help"
+        out.append({"level": "critical", "incident_id": e_inc["id"],
+                    "message": f"{e_inc['id']} ESCALATED by {esc['team_name']}: {esc['reason']} — needs {needs}"})
     for a_inc in incidents:
         for a in a_inc.get("assignments", []):
             if a["status"] == "assigned" and minutes_since(a["assigned_at"]) > 1:

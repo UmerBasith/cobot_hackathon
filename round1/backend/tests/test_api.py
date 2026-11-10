@@ -207,3 +207,46 @@ def test_landslide_anonymous_reported_severity(client):
                                                      contact_name="X", contact_phone="123", life_threat=True)).json()
     assert inc["category"] == "landslide" and inc["contact_phone"] == "" and inc["reported_severity"] == "Critical"
     assert client.get(f"/api/incidents/{inc['id']}/suggest").json()[0]["slot"] == "Search & rescue"
+
+
+def test_responder_quick_actions_reach_admin_and_citizen(client):
+    """Update Status / Escalate / Complete from the responder app must show up for the admin and the citizen."""
+    inc = client.post("/api/incidents", json=report(category="fire", life_threat=True, area="T. Nagar",
+                                                     lat=13.0418, lng=80.2341)).json()
+    best = [s["best"] for s in client.get(f"/api/incidents/{inc['id']}/suggest").json() if s["best"]]
+    asg = client.post(f"/api/incidents/{inc['id']}/assign", json={"team_ids": best[:1]}).json()["assignments"][0]
+
+    # quick actions need an accepted job
+    assert client.post(f"/api/assignments/{asg['id']}/update", json={"note": "Smoke on 2nd floor"}).status_code == 400
+    client.post(f"/api/assignments/{asg['id']}/respond", json={"accept": True})
+
+    # Update Status: field report -> admin incident timeline + citizen tracking timeline
+    up = client.post(f"/api/assignments/{asg['id']}/update", json={"note": "Fire contained to 2nd floor", "tag": "contained"}).json()
+    assert up["status"] == "In Progress" and "Hazard contained: Fire contained to 2nd floor" in up["timeline"][-1]["note"]
+    assert any("Fire contained" in e["note"] for e in client.get(f"/api/track/{inc['id']}").json()["timeline"])
+    assert client.post(f"/api/assignments/{asg['id']}/update", json={"note": "x"}).status_code == 422
+    assert client.post(f"/api/assignments/{asg['id']}/update", json={"note": "ok ok", "tag": "bogus"}).status_code == 422
+
+    # Escalate: critical alert for the control room until another team is assigned
+    esc = client.post(f"/api/assignments/{asg['id']}/escalate",
+                      json={"reason": "Fire spreading to next building", "needs": ["fire", "ambulance"]}).json()
+    assert esc["escalation"]["needs"] == ["fire", "ambulance"] and "ESCALATED" in esc["timeline"][-1]["note"]
+    alerts = client.get("/api/escalations").json()
+    assert any(a["level"] == "critical" and a["incident_id"] == inc["id"] and "ESCALATED" in a["message"] for a in alerts)
+    assert any("ESCALATED" in e["note"] for e in client.get(f"/api/track/{inc['id']}").json()["timeline"])
+    assert client.post(f"/api/assignments/{asg['id']}/escalate", json={"reason": "no", "needs": []}).status_code == 422
+    assert client.post(f"/api/assignments/{asg['id']}/escalate", json={"reason": "help!", "needs": ["tank"]}).status_code == 422
+    # admin sends one more team -> the escalation alert clears
+    more = [t["id"] for t in client.get("/api/teams").json() if t["status"] == "available"][:1]
+    assert more and client.post(f"/api/incidents/{inc['id']}/assign", json={"team_ids": more}).status_code == 200
+    assert not any("ESCALATED" in a["message"] and a["incident_id"] == inc["id"] for a in client.get("/api/escalations").json())
+
+    # Complete Response: stage flow, closing note required, shown everywhere
+    client.post(f"/api/assignments/{asg['id']}/status", json={"status": "en_route"})
+    client.post(f"/api/assignments/{asg['id']}/status", json={"status": "on_scene"})
+    done = client.post(f"/api/assignments/{asg['id']}/status", json={"status": "completed", "note": "Fire out, 2 rescued"}).json()
+    assert done["assignments"][0]["status"] == "completed"
+    track = client.get(f"/api/track/{inc['id']}").json()
+    assert any(t["status"] == "completed" for t in track["teams"]) and "Fire out, 2 rescued" in track["timeline"][-1]["note"]
+    # finished job can't be updated any more
+    assert client.post(f"/api/assignments/{asg['id']}/update", json={"note": "late note"}).status_code == 400

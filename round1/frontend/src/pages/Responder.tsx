@@ -7,12 +7,12 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Bell, BarChart3, Boxes, CheckCircle2, ChevronDown, ClipboardList, Clock, Info, LayoutDashboard, MapPin,
-  LogOut, MoreHorizontal, Navigation, Phone, RefreshCw, Settings, ShieldAlert, Siren, Truck, Users, Wrench, X,
+  ArrowUp, LogOut, Pencil, MoreHorizontal, Send, Navigation, Phone, RefreshCw, Settings, ShieldAlert, Siren, Truck, Users, Wrench, X,
 } from "lucide-react";
 import { Button, Card, EmptyState, Skeleton, Textarea, useToast } from "@/ui";
 import { CATEGORY_META, CategoryIcon, ReasonsList } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
-import { assignmentStatus, errText, getActiveAlerts, getIncidents, getResponderJobs, getTeams, respondAssignment, timeAgo } from "@/lib/resq";
+import { assignmentStatus, errText, escalateAssignment, fieldUpdate, getActiveAlerts, getIncidents, getResponderJobs, getTeams, respondAssignment, timeAgo, type FieldTag, type NeedType } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
@@ -151,8 +151,6 @@ function CurrentJob({ job, team, onChange, compact }: { job: ResponderJob; team?
   const { assignment: a, incident: i } = job;
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
-  const [note, setNote] = useState("");
-  const [completing, setCompleting] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [stamps, setStamps] = useState<Partial<Record<AssignmentStatus, string>>>({});
   useEffect(() => { setRejecting(false); setReason(""); setStamps((s) => (s[a.status] ? s : { ...s, [a.status]: a.updated_at })); }, [a.status, a.updated_at]);
@@ -167,22 +165,6 @@ function CurrentJob({ job, team, onChange, compact }: { job: ResponderJob; team?
   const eta = Math.max(1, Math.round(a.eta_min));
   const sevTone = i.severity === "Critical" ? "bg-red-600 text-white" : i.severity === "High" ? "bg-orange-500 text-white" : i.severity === "Medium" ? "bg-amber-400 text-amber-950" : "bg-emerald-500 text-white";
   const next: { to: "en_route" | "on_scene"; label: string } | null = a.status === "accepted" ? { to: "en_route", label: "Start — en route" } : a.status === "en_route" ? { to: "on_scene", label: "Arrived — on scene" } : null;
-  const canComplete = a.status === "on_scene" || a.status === "en_route";
-
-  function advance() {
-    if (next) run("adv", () => assignmentStatus(a.id, next.to), next.to === "en_route" ? "Marked en route" : "Arrived on scene");
-    else if (a.status === "assigned") toast("info", "Accept the job first", "Accept or reject the dispatch above.");
-    else if (a.status === "on_scene") setCompleting(true);
-  }
-  function complete() {
-    if (a.status !== "on_scene") { toast("info", "Not on scene yet", "Mark ‘Arrived — on scene’ before completing."); return; }
-    setCompleting(true); setTimeout(() => scrollTo(`r-complete-${a.id}`), 50);
-  }
-  function escalate() {
-    toast("warning", "Control room notified", `Escalation raised for ${i.id}. Calling 112…`);
-    window.location.href = "tel:112";
-  }
-
   const acceptReject = a.status === "assigned" && (
     !rejecting ? (
       <div className="grid grid-cols-2 gap-2">
@@ -281,24 +263,7 @@ function CurrentJob({ job, team, onChange, compact }: { job: ResponderJob; team?
 
       <div className="space-y-5">
         {team && <TeamCard team={team} busy />}
-        <Card id="r-actions" className="scroll-mt-20 p-5">
-          <p className="mb-3 font-semibold">Quick Actions</p>
-          <div className="grid gap-2">
-            <ActionBtn icon={RefreshCw} title="Update Status" sub={next ? next.label : a.status === "on_scene" ? "Ready to complete" : "Accept job first"} tone="blue" loading={busy === "adv"} onClick={advance} />
-            <ActionBtn icon={ShieldAlert} title="Escalate" sub="Call control room · 112" tone="amber" onClick={escalate} />
-            <ActionBtn icon={CheckCircle2} title="Complete Response" sub={canComplete ? "Add completion note" : "Available on scene"} tone="green" onClick={complete} />
-          </div>
-          {completing && a.status === "on_scene" && (
-            <div id={`r-complete-${a.id}`} className="mt-3 space-y-2">
-              <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Completion note (required) e.g. 2 people rescued, shifted to GH" className="min-h-20" />
-              <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={() => setCompleting(false)}>Cancel</Button>
-                <Button icon={CheckCircle2} className="bg-emerald-600 shadow-none hover:bg-emerald-500" disabled={note.trim().length < 3} loading={busy === "done"}
-                  onClick={() => run("done", () => assignmentStatus(a.id, "completed", note.trim()), "Job completed")}>Complete</Button>
-              </div>
-            </div>
-          )}
-        </Card>
+        <QuickActions job={job} onChange={onChange} />
         <Card id="r-timeline" className="scroll-mt-20 p-5">
           <p className="mb-3 font-semibold">Incident Timeline</p>
           <ol className="relative space-y-4 border-l-2 border-slate-200 pl-5 dark:border-line">
@@ -318,6 +283,176 @@ function CurrentJob({ job, team, onChange, compact }: { job: ResponderJob; team?
         </Card>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * Quick Actions (as in the design mock-up): Update Status · Escalate · Complete Response.
+ * Every action is saved on the server, so the control room (incident page + escalation banner) and the
+ * citizen's tracking page show it within ~5 s (they refresh every 5 s).
+ * ---------------------------------------------------------------------------------------------- */
+const TAGS: { k: FieldTag; label: string }[] = [
+  { k: "situation", label: "Situation update" }, { k: "contained", label: "Hazard contained" },
+  { k: "rescued", label: "People rescued" }, { k: "casualty", label: "Casualty update" }, { k: "need_time", label: "Need more time" },
+];
+const ESC_REASONS = ["Fire spreading", "More casualties", "Structural collapse risk", "Gas / chemical risk", "Access blocked", "Need more crew"];
+const NEEDS: { k: NeedType; label: string }[] = [
+  { k: "fire", label: "Fire engine" }, { k: "rescue", label: "Rescue unit" }, { k: "ambulance", label: "Ambulance" }, { k: "police", label: "Police" },
+  { k: "ndrf", label: "NDRF" }, { k: "boat", label: "Boat" }, { k: "hazmat", label: "HAZMAT" }, { k: "power", label: "Power board" },
+];
+
+function QuickActions({ job, onChange }: { job: ResponderJob; onChange: () => void }) {
+  const toast = useToast();
+  const { assignment: a, incident: i } = job;
+  const [panel, setPanel] = useState<"update" | "escalate" | "complete" | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [tag, setTag] = useState<FieldTag>("situation");
+  const [msg, setMsg] = useState("");
+  const [reason, setReason] = useState("");
+  const [needs, setNeeds] = useState<NeedType[]>([]);
+  const [escNote, setEscNote] = useState("");
+  const [closing, setClosing] = useState("");
+  const active = a.status === "accepted" || a.status === "en_route" || a.status === "on_scene";
+  const nextStage: { to: "en_route" | "on_scene"; label: string } | null =
+    a.status === "accepted" ? { to: "en_route", label: "En route" } : a.status === "en_route" ? { to: "on_scene", label: "On scene" } : null;
+  const escalatedPending = i.escalation && i.escalation.team_id === a.team_id;
+  const myUpdates = i.timeline.filter((e) => e.actor === "responder" && e.note.includes(a.team_name)).slice(-3).reverse();
+
+  async function run(key: string, fn: () => Promise<unknown>, ok: string, sub: string, after?: () => void) {
+    setBusy(key);
+    try { await fn(); toast("success", ok, sub); after?.(); onChange(); }
+    catch (e) { toast("error", "Couldn't send", errText(e)); }
+    finally { setBusy(null); }
+  }
+  function open(p: "update" | "escalate" | "complete") {
+    if (!active) { toast("info", "Accept the job first", "Quick actions unlock after you accept the dispatch."); return; }
+    setPanel((x) => (x === p ? null : p));
+  }
+
+  const tiles = [
+    { k: "update" as const, icon: Pencil, label: "Update Status", sub: nextStage ? `Next: ${nextStage.label}` : "Send field update" },
+    { k: "escalate" as const, icon: ArrowUp, label: "Escalate", sub: escalatedPending ? "Escalated" : "Need more help" },
+    { k: "complete" as const, icon: CheckCircle2, label: "Complete Response", sub: a.status === "on_scene" ? "Close the job" : "When on scene" },
+  ];
+
+  return (
+    <Card id="r-actions" className="scroll-mt-20 p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <p className="font-semibold">Quick Actions</p>
+        <span className="text-[11px] text-slate-500 dark:text-muted">Seen by control room &amp; citizen</span>
+      </div>
+      <div className="grid grid-cols-3 gap-2.5">
+        {tiles.map((t) => (
+          <button key={t.k} type="button" onClick={() => open(t.k)} aria-pressed={panel === t.k}
+            className={cn("flex flex-col items-center justify-center gap-1.5 rounded-2xl px-2 py-4 text-center ring-1 transition hover:-translate-y-0.5",
+              panel === t.k ? "bg-red-600 text-white ring-red-600 shadow-lg shadow-red-500/25" : "bg-red-50 text-red-600 ring-red-100 hover:bg-red-100 dark:bg-red-950/30 dark:ring-red-900/50",
+              !active && "opacity-60")}>
+            <t.icon className="size-6" strokeWidth={2.2} />
+            <span className="text-[13px] leading-tight font-semibold">{t.label}</span>
+            <span className={cn("text-[10px] leading-tight", panel === t.k ? "text-white/80" : "text-red-500/80")}>{t.sub}</span>
+          </button>
+        ))}
+      </div>
+
+      {escalatedPending && panel !== "escalate" && (
+        <p className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-900">
+          <ShieldAlert className="size-4 shrink-0" />Escalated at {fmtTime(i.escalation!.at)} · control room alerted: {i.escalation!.reason}
+        </p>
+      )}
+
+      {/* ---------- Update Status ---------- */}
+      {panel === "update" && (
+        <div className="mt-4 space-y-3 rounded-2xl border border-slate-200 p-3.5 dark:border-line">
+          <div>
+            <p className="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-muted">Stage</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["en_route", "on_scene"] as const).map((s) => {
+                const done = ORDER.indexOf(a.status) >= ORDER.indexOf(s);
+                const isNext = nextStage?.to === s;
+                return (
+                  <Button key={s} variant={isNext ? "primary" : "outline"} disabled={!isNext} loading={busy === s}
+                    className={cn(isNext && "bg-red-600 shadow-none hover:bg-red-500")} icon={done ? CheckCircle2 : s === "en_route" ? Truck : MapPin}
+                    onClick={() => run(s, () => assignmentStatus(a.id, s), s === "en_route" ? "Marked en route" : "Arrived on scene", `${i.id} · status updated everywhere`)}>
+                    {s === "en_route" ? "En route" : "On scene"}
+                  </Button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-muted">Field update</p>
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {TAGS.map((t) => (
+                <button key={t.k} type="button" onClick={() => setTag(t.k)}
+                  className={cn("rounded-full px-3 py-1 text-xs font-medium ring-1 transition", tag === t.k ? "bg-slate-900 text-white ring-slate-900 dark:bg-white dark:text-slate-900" : "bg-white text-slate-700 ring-slate-200 dark:bg-surface dark:text-fg dark:ring-line")}>{t.label}</button>
+              ))}
+            </div>
+            <Textarea value={msg} onChange={(e) => setMsg(e.target.value)} className="min-h-16" placeholder="e.g. Fire contained to 2nd floor, 3 people evacuated" />
+            <Button className="mt-2 w-full bg-red-600 shadow-none hover:bg-red-500" icon={Send} disabled={msg.trim().length < 3} loading={busy === "upd"}
+              onClick={() => run("upd", () => fieldUpdate(a.id, msg.trim(), tag), "Update sent", "Control room and citizen can see it", () => setMsg(""))}>Send update</Button>
+          </div>
+        </div>
+      )}
+
+      {/* ---------- Escalate ---------- */}
+      {panel === "escalate" && (
+        <div className="mt-4 space-y-3 rounded-2xl border border-amber-200 bg-amber-50/50 p-3.5 dark:border-amber-900 dark:bg-amber-950/20">
+          <div>
+            <p className="mb-1.5 text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300">What's wrong?</p>
+            <div className="flex flex-wrap gap-1.5">
+              {ESC_REASONS.map((r) => (
+                <button key={r} type="button" onClick={() => setReason(r)}
+                  className={cn("rounded-full px-3 py-1 text-xs font-medium ring-1 transition", reason === r ? "bg-amber-600 text-white ring-amber-600" : "bg-white text-slate-700 ring-amber-200 dark:bg-surface dark:text-fg dark:ring-amber-900")}>{r}</button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-1.5 text-xs font-semibold tracking-wide text-amber-800 uppercase dark:text-amber-300">Send more</p>
+            <div className="grid grid-cols-4 gap-1.5">
+              {NEEDS.map((n) => {
+                const on = needs.includes(n.k);
+                return (
+                  <button key={n.k} type="button" onClick={() => setNeeds((x) => (on ? x.filter((y) => y !== n.k) : [...x, n.k]))}
+                    className={cn("rounded-lg px-1 py-1.5 text-[11px] font-semibold ring-1 transition", on ? "bg-red-600 text-white ring-red-600" : "bg-white text-slate-700 ring-slate-200 dark:bg-surface dark:text-fg dark:ring-line")}>{n.label}</button>
+                );
+              })}
+            </div>
+          </div>
+          <Textarea value={escNote} onChange={(e) => setEscNote(e.target.value)} className="min-h-14" placeholder="Optional details, e.g. 2 people trapped on 3rd floor" />
+          <Button variant="danger" className="w-full" icon={ArrowUp} disabled={reason.length < 3} loading={busy === "esc"}
+            onClick={() => run("esc", () => escalateAssignment(a.id, reason, needs, escNote.trim()), "Escalation sent", "Control room alerted — red alert on their screen", () => { setPanel(null); setEscNote(""); })}>
+            Send escalation to control room
+          </Button>
+          <a href="tel:112" className="block text-center text-xs font-semibold text-red-700 underline dark:text-red-300">Life in danger right now? Call 112 as well</a>
+        </div>
+      )}
+
+      {/* ---------- Complete Response ---------- */}
+      {panel === "complete" && (
+        a.status !== "on_scene" ? (
+          <p className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-600 dark:bg-surface-2 dark:text-muted">Mark <b>On scene</b> (Update Status) before completing the response.</p>
+        ) : (
+          <div className="mt-4 space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 dark:border-emerald-900 dark:bg-emerald-950/20">
+            <Textarea value={closing} onChange={(e) => setClosing(e.target.value)} className="min-h-16" placeholder="Closing note (required) e.g. Fire out, 2 rescued, shifted to GH" />
+            <Button className="w-full bg-emerald-600 shadow-none hover:bg-emerald-500" icon={CheckCircle2} disabled={closing.trim().length < 3} loading={busy === "done"}
+              onClick={() => run("done", () => assignmentStatus(a.id, "completed", closing.trim()), "Response completed", "Control room will verify and close", () => setPanel(null))}>
+              Complete response
+            </Button>
+          </div>
+        )
+      )}
+
+      {myUpdates.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-3 dark:border-line">
+          <p className="mb-1.5 text-xs font-semibold tracking-wide text-slate-500 uppercase dark:text-muted">Your recent updates</p>
+          <ul className="space-y-1.5">
+            {myUpdates.map((e, k) => (
+              <li key={k} className="flex gap-2 text-xs"><span className="shrink-0 font-mono text-slate-400">{fmtTime(e.at)}</span><span className="text-slate-700 dark:text-fg">{e.note.replace(`${a.team_name} · `, "").replace(`${a.team_name} `, "")}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </Card>
   );
 }
 
@@ -348,15 +483,6 @@ function Detail({ k, v }: { k: string; v: string }) {
 function Kpi({ label, value, tone }: { label: string; value: number; tone: "red" | "amber" | "green" }) {
   const c = { red: "text-red-600", amber: "text-amber-600", green: "text-emerald-600" }[tone];
   return <div className="rounded-xl bg-white px-4 py-2.5 shadow-sm ring-1 ring-slate-200 dark:bg-surface dark:ring-line"><p className="text-[11px] whitespace-nowrap text-slate-500 dark:text-muted">{label}</p><p className={cn("font-display text-2xl font-bold", c)}>{value}</p></div>;
-}
-function ActionBtn({ icon: Icon, title, sub, tone, onClick, loading }: { icon: typeof Users; title: string; sub: string; tone: "blue" | "amber" | "green"; onClick: () => void; loading?: boolean }) {
-  const c = { blue: "bg-blue-50 text-blue-600 dark:bg-blue-950/40", amber: "bg-amber-50 text-amber-600 dark:bg-amber-950/40", green: "bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40" }[tone];
-  return (
-    <button onClick={onClick} disabled={loading} className="flex items-center gap-3 rounded-xl border border-slate-200 p-3 text-left transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60 dark:border-line dark:hover:bg-surface-2">
-      <span className={cn("grid size-9 shrink-0 place-items-center rounded-lg", c)}>{loading ? <RefreshCw className="size-4 animate-spin" /> : <Icon className="size-4" />}</span>
-      <span className="min-w-0"><span className="block text-sm font-semibold">{title}</span><span className="block truncate text-xs text-slate-500 dark:text-muted">{sub}</span></span>
-    </button>
-  );
 }
 function SideItem({ icon: Icon, label, active, count, red, onClick }: { icon: typeof Users; label: string; active?: boolean; count?: number; red?: boolean; onClick: () => void }) {
   return (

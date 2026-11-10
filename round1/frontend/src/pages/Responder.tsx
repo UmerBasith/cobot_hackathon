@@ -1,5 +1,6 @@
 /** /responder — field team portal: dark navy sidebar (desktop), phone layout + bottom tab bar (mobile). */
 import { BrandMark } from "@/sections/Logo";
+import { AlertsView, AssignmentsView, ReportsView, ResourcesView, SettingsView, TeamView, type RView } from "./ResponderViews";
 import { logout } from "@/lib/auth";
 
 const signOut = () => { logout("responder"); window.location.assign("/responder/login"); };
@@ -48,6 +49,10 @@ export default function Responder() {
   const current = jobs?.find((j) => j.assignment.status !== "assigned") ?? jobs?.[0];
   const others = (jobs ?? []).filter((j) => j !== current);
   const alertCount = alerts?.length ?? 0;
+  const view = (params.get("view") as RView) || "dashboard";
+  const go = (v: RView) => { const p = new URLSearchParams(params); if (v === "dashboard") p.delete("view"); else p.set("view", v); setParams(p); window.scrollTo({ top: 0 }); };
+  const [sound, setSoundState] = useState(() => { try { return localStorage.getItem("resq-sound") !== "off"; } catch { return true; } });
+  const setSound = (v: boolean) => { setSoundState(v); try { localStorage.setItem("resq-sound", v ? "on" : "off"); } catch { /* ignore */ } };
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 dark:bg-bg dark:text-fg">
@@ -58,13 +63,13 @@ export default function Responder() {
           <div className="leading-tight"><p className="font-display text-lg font-bold text-white">ResQNet</p><p className="text-[11px] text-slate-400">Citizen Emergency Platform</p></div>
         </div>
         <nav className="mt-2 flex-1 space-y-1 px-3 text-sm">
-          <SideItem icon={LayoutDashboard} label="Dashboard" active onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
-          <SideItem icon={ClipboardList} label="My Assignments" count={jobs?.length || undefined} onClick={() => scrollTo("r-current")} />
-          <SideItem icon={Users} label="Team Status" onClick={() => scrollTo("r-team")} />
-          <SideItem icon={Bell} label="Alerts" count={alertCount || undefined} red onClick={() => scrollTo("r-timeline")} />
-          <SideItem icon={BarChart3} label="Reports" onClick={() => scrollTo("r-details")} />
-          <SideItem icon={Boxes} label="Resources" onClick={() => scrollTo("r-team")} />
-          <SideItem icon={Settings} label="Settings" onClick={() => scrollTo("r-actions")} />
+          <SideItem icon={LayoutDashboard} label="Dashboard" active={view === "dashboard"} onClick={() => go("dashboard")} />
+          <SideItem icon={ClipboardList} label="My Assignments" active={view === "assignments"} count={jobs?.length || undefined} onClick={() => go("assignments")} />
+          <SideItem icon={Users} label="Team Status" active={view === "team"} onClick={() => go("team")} />
+          <SideItem icon={Bell} label="Alerts" active={view === "alerts"} count={alertCount || undefined} red onClick={() => go("alerts")} />
+          <SideItem icon={BarChart3} label="Reports" active={view === "reports"} onClick={() => go("reports")} />
+          <SideItem icon={Boxes} label="Resources" active={view === "resources"} onClick={() => go("resources")} />
+          <SideItem icon={Settings} label="Settings" active={view === "settings"} onClick={() => go("settings")} />
           <SideItem icon={LogOut} label="Log out" onClick={signOut} />
         </nav>
         <Link to="/admin" className="mx-3 mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 hover:bg-white/5 hover:text-white"><LayoutDashboard className="size-3.5" />Open control room</Link>
@@ -84,7 +89,7 @@ export default function Responder() {
             <span className="hidden items-center gap-1 text-xs text-slate-500 md:inline-flex"><MapPin className="size-3.5 text-red-600" />Chennai</span>
             <div className="ml-auto flex items-center gap-2">
               <button onClick={signOut} className="grid size-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-surface-2" aria-label="Log out" title="Log out"><LogOut className="size-5" /></button>
-              <button onClick={() => scrollTo("r-timeline")} className="relative grid size-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-surface-2" aria-label="Alerts">
+              <button onClick={() => go("alerts")} className="relative grid size-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-surface-2" aria-label="Alerts">
                 <Bell className="size-5" />{alertCount > 0 && <span className="absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-red-600 text-[10px] font-bold text-white">{alertCount}</span>}
               </button>
               <label className="relative flex items-center">
@@ -102,6 +107,18 @@ export default function Responder() {
         </header>
 
         <main className="mx-auto max-w-[1280px] space-y-5 px-4 pt-5 pb-28 lg:px-6 lg:pb-10">
+          {view === "assignments" && <AssignmentsView jobs={jobs} incidents={incidents} team={team} onOpen={() => go("dashboard")} />}
+          {view === "team" && <TeamView me={me} busy={!!jobs?.length} />}
+          {view === "alerts" && <AlertsView alerts={alerts} />}
+          {view === "reports" && <ReportsView incidents={incidents} team={team} />}
+          {view === "resources" && <ResourcesView me={me} />}
+          {view === "settings" && <>
+            <SettingsView teams={teams} team={team} onPick={pick} sound={sound} setSound={setSound} onSignOut={signOut} />
+            <div className="grid grid-cols-2 gap-2 lg:hidden">
+              <button onClick={() => go("reports")} className="rounded-xl bg-white p-3 text-sm font-semibold ring-1 ring-slate-200">Reports</button>
+              <button onClick={() => go("resources")} className="rounded-xl bg-white p-3 text-sm font-semibold ring-1 ring-slate-200">Resources</button>
+            </div></>}
+          {view === "dashboard" && <>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">Responder Dashboard</h1>
@@ -132,16 +149,17 @@ export default function Responder() {
                 )}
               </>
             )}
+          </>}
         </main>
       </div>
 
       {/* Bottom tab bar (mobile) */}
       <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white pb-[env(safe-area-inset-bottom)] lg:hidden dark:border-line dark:bg-surface">
-        <Tab icon={LayoutDashboard} label="Dashboard" active onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
-        <Tab icon={ClipboardList} label="Assignments" onClick={() => scrollTo("r-current")} />
-        <Tab icon={Users} label="Team" onClick={() => scrollTo("r-team")} />
-        <Tab icon={Bell} label="Alerts" badge={alertCount} onClick={() => scrollTo("r-timeline")} />
-        <Tab icon={MoreHorizontal} label="More" onClick={() => scrollTo("r-actions")} />
+        <Tab icon={LayoutDashboard} label="Dashboard" active={view === "dashboard"} onClick={() => go("dashboard")} />
+        <Tab icon={ClipboardList} label="Assignments" active={view === "assignments"} onClick={() => go("assignments")} />
+        <Tab icon={Users} label="Team" active={view === "team"} onClick={() => go("team")} />
+        <Tab icon={Bell} label="Alerts" active={view === "alerts"} badge={alertCount} onClick={() => go("alerts")} />
+        <Tab icon={MoreHorizontal} label="More" active={["reports", "resources", "settings"].includes(view)} onClick={() => go("settings")} />
       </nav>
     </div>
   );

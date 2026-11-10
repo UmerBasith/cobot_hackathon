@@ -6,6 +6,9 @@ at the **Cobot-Ex Inter-College Hackathon** (Crescent Institute, Vandalur, Chenn
 **Goal: WIN.** Not "finish". Win. That means: a real, working, beautiful website that clearly solves
 the problem, proven with numbers, plus a striking animated deck and a short report — all on time.
 
+> **Running in a cloud/online session (Linux, no `C:\` paths)? Read `ONLINE_MODE.md` first** — use `bash tools/setup.sh`,
+> `tools/*.sh` scripts and `.venv/bin/python`; push every milestone; the final demo runs on the user's laptop.
+
 ## The deal with the user
 - The user's only job is to **paste the problem statement** (text or photo) with `/round1` or `/round2`.
 - **You take over everything else**: understanding, research, choosing the best idea, building, testing,

@@ -63,26 +63,33 @@ export default function IncidentMap(props: IncidentMapProps) {
   );
 }
 
+// IMPORTANT: MapLibre positions the element passed to `new Marker({ element })` with its own
+// `position:absolute` + `transform:translate(...)`. Never set position/transform on that outer
+// element (it makes markers drift away from their coordinates). Style an inner element instead.
 function dotEl(p: MapPoint) {
+  const outer = document.createElement("div");
+  outer.className = "resq-dot";
   const el = document.createElement("button");
   el.title = `${p.id} · ${p.title}`;
-  el.className = "resq-dot";
   const c = SEV_HEX[p.severity];
   const size = p.severity === "Critical" ? 18 : p.severity === "High" ? 15 : 13;
-  el.style.cssText = `position:relative;width:${size}px;height:${size}px;border-radius:999px;background:${p.resolved ? "#94a3b8" : c};border:2.5px solid white;box-shadow:0 2px 6px rgb(0 0 0/.35);cursor:pointer;padding:0`;
+  el.style.cssText = `display:block;position:relative;width:${size}px;height:${size}px;border-radius:999px;background:${p.resolved ? "#94a3b8" : c};border:2.5px solid white;box-shadow:0 2px 6px rgb(0 0 0/.35);cursor:pointer;padding:0`;
   if (p.severity === "Critical" && !p.resolved) {
     const ring = document.createElement("span");
     ring.style.cssText = `position:absolute;inset:-3px;border-radius:999px;border:2px solid ${c};animation:sos-ring 1.6s ease-out infinite`;
     el.appendChild(ring);
   }
-  return el;
+  outer.appendChild(el);
+  return outer;
 }
 
 function teamEl(t: TeamPoint) {
+  const outer = document.createElement("div");
+  outer.title = `${t.label} · ${t.status}`;
   const el = document.createElement("div");
-  el.title = `${t.label} · ${t.status}`;
   el.style.cssText = `width:16px;height:16px;border-radius:4px;background:${TEAM_HEX[t.status]};border:2.5px solid white;box-shadow:0 2px 6px rgb(0 0 0/.35);transform:rotate(45deg)`;
-  return el;
+  outer.appendChild(el);
+  return outer;
 }
 
 function zoneEl(z: ZonePoint) {

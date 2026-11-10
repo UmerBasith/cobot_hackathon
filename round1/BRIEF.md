@@ -173,3 +173,23 @@ UI:
 - `/app/analytics`: KPI tiles (resolution rate, avg time to assign, critical avg time to assign, team utilisation), reported vs resolved by hour (area/line), by area (bar, critical stacked), by category (bar with avg score), status mix, team performance table (jobs, completed, rejected, avg ETA). Label times "measured from demo data".
 - `/app/zones`: map with zone circles coloured by status (critical red, evacuate orange, watch amber, safe green) + shelter markers; zone list with status select + note (PATCH) and open/critical incident counts; shelters list with occupancy bars (% full, red when ≥90%), +10/−10 buttons (PATCH), facilities chips; tiles: total shelter capacity, people sheltered, % full, zones under evacuation.
 - Nav: Dashboard, Incidents, Teams, Alerts, Analytics, Zones & shelters, New report.
+
+## 12. INNOVATION — Golden Hour Engine + CPR Hero Network (backend DONE, 31 tests)
+Pitch: "We don't dispatch by distance or severity. We dispatch by survival." + "The closest responder is usually not in an ambulance."
+Survival model: survival = 95 % × 0.5^(minutes waiting / half-life); half-life per condition (cardiac 7 min, trapped in fire 12, rising water 25, gas/shock 20, major trauma 60, debris 600, serious 120, minor 2880); CPR/first aid by a hero multiplies half-life (cardiac ×3); decline stops when a team is on scene. Simplified DEMO assumptions — always label as such.
+
+| Method | Path | Response |
+|---|---|---|
+| GET | /api/golden-hour | `{people_at_risk, expected_survivors, lives_lost_per_min_delay, method, incidents: GHRow[] (sorted by lives_lost_per_min_delay desc), plan: {steps:[{incident_id,title,profile_label,people_at_risk,team_id,team_name,eta_min,lives_gained,nearest_first_team}], expected_survivors_golden, expected_survivors_nearest, extra_lives, people_waiting, teams_free}}` |
+| GHRow | – | `{incident_id,title,category,area,severity,status,profile,profile_label,basis,half_life_min,people_at_risk,minutes_since_report,help_eta_min|null,help (text),cpr_started,survival_now,survival_at_help,survival_if_5_min_later (0-1),expected_survivors,lives_lost_per_min_delay}` |
+| POST | /api/golden-hour/apply | `{assigned, steps, extra_lives}` — assigns the plan's teams |
+| GET | /api/golden-hour/simulation | `{runs:40, incidents_per_run:25, teams:13, people_at_risk_avg, golden_hour_survivors, nearest_first_survivors, extra_lives_per_disaster, improvement_pct (≈31), method}` |
+| GET | /api/incidents/{id}/survival | `{profile|null, profile_label, basis, half_life_min, cpr_slowdown, people_at_risk, now_min, help_min|null, help, cpr_min|null, survival_now (0-100), points:[{t (min), no_help, with_cpr, current_plan} (0-100)]}` |
+| GET | /api/heroes | Hero[] `{id,name,skills[],lat,lng,phone,available,verified,rescues}` (13 heroes) |
+| GET | /api/incidents/{id}/heroes | `{needs_heroes, radius_m:3000, responding: Volunteer[], nearby:[{id,name,skills,distance_m,eta_min,status}]}` |
+| POST | /api/incidents/{id}/heroes/alert?count=3 | `{alerted:[ids], incident}` (409 if none left) |
+| GET | /api/hero/{hero_id} | `{hero, jobs:[{volunteer, incident:{id,title,category,area,landmark,lat,lng,severity,score,description,people_affected,life_threat,injuries,created_at,status}}]}` |
+| POST | /api/hero/{hero_id}/respond | body `{incident_id, action:"accept"|"decline"|"arrived"|"cpr"|"done"}` → Incident |
+Volunteer (on Incident.volunteers[]): `{id,name,skills[],status:"alerted"|"accepted"|"declined"|"arrived"|"cpr"|"done",distance_m,eta_min,alerted_at,updated_at,cpr_at|null}`.
+Auto: a new report with life_threat or serious injuries automatically alerts the 3 nearest heroes (≤3 km). Decline → next hero alerted.
+Demo: report "Man collapsed, not breathing" (medical, life threat) at T. Nagar (13.041, 80.2345) → heroes Priya S / Deepa R / Anitha G alerted → open /hero?id=HERO-01 → Accept → Arrived → Start CPR (metronome) → survival curve on admin bends up.

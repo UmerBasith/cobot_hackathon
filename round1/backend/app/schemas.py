@@ -100,6 +100,7 @@ class Incident(PreviewIn, SeverityOut):
     duplicate_of: str | None = None
     witnesses: int = 0
     assignments: list[Assignment] = []
+    volunteers: list[dict] = []
     created_at: str
     updated_at: str
     timeline: list[TimelineEntry]

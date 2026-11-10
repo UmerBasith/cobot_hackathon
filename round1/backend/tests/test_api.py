@@ -207,3 +207,46 @@ def test_landslide_anonymous_reported_severity(client):
                                                      contact_name="X", contact_phone="123", life_threat=True)).json()
     assert inc["category"] == "landslide" and inc["contact_phone"] == "" and inc["reported_severity"] == "Critical"
     assert client.get(f"/api/incidents/{inc['id']}/suggest").json()[0]["slot"] == "Search & rescue"
+
+
+# ---------- Golden Hour Engine + CPR Hero Network ----------
+from app import golden  # noqa: E402
+
+
+def test_survival_model():
+    assert golden.survival(0, 7) == pytest.approx(0.95)
+    assert golden.survival(7, 7) == pytest.approx(0.475)
+    # CPR at minute 2 slows the decline
+    assert golden.survival(10, 7, cpr_at=2, slow=3) > golden.survival(10, 7)
+    # help on scene stops the decline
+    assert golden.survival(60, 7, help_at=5) == pytest.approx(golden.survival(5, 7))
+
+
+def test_golden_hour_endpoint_and_plan(client):
+    d = client.get("/api/golden-hour").json()
+    assert d["people_at_risk"] > 0 and d["incidents"]
+    rates = [r["lives_lost_per_min_delay"] for r in d["incidents"]]
+    assert rates == sorted(rates, reverse=True)
+    assert d["plan"]["expected_survivors_golden"] >= d["plan"]["expected_survivors_nearest"] - 1e-6
+    applied = client.post("/api/golden-hour/apply").json()
+    assert applied["assigned"] == len(d["plan"]["steps"])
+    sim = client.get("/api/golden-hour/simulation").json()
+    assert sim["golden_hour_survivors"] > sim["nearest_first_survivors"]
+
+
+def test_cardiac_report_alerts_heroes_and_cpr_slows_decline(client):
+    inc = client.post("/api/incidents", json=report(category="medical", life_threat=True, injuries="serious",
+                                                     area="T. Nagar", lat=13.041, lng=80.2345)).json()
+    assert len(inc["volunteers"]) == 3 and all(v["status"] == "alerted" for v in inc["volunteers"])
+    hero = inc["volunteers"][0]["id"]
+    assert client.get(f"/api/hero/{hero}").json()["jobs"]
+    client.post(f"/api/hero/{hero}/respond", json={"incident_id": inc["id"], "action": "accept"})
+    out = client.post(f"/api/hero/{hero}/respond", json={"incident_id": inc["id"], "action": "cpr"}).json()
+    assert next(v for v in out["volunteers"] if v["id"] == hero)["cpr_at"]
+    curve = client.get(f"/api/incidents/{inc['id']}/survival").json()
+    assert curve["profile"] == "cardiac" and curve["cpr_min"] is not None
+    last = curve["points"][-1]
+    assert last["with_cpr"] >= last["no_help"]
+    assert client.post(f"/api/hero/{hero}/respond", json={"incident_id": inc["id"], "action": "fly"}).status_code == 422
+    near = client.get(f"/api/incidents/{inc['id']}/heroes").json()
+    assert near["needs_heroes"] and near["nearby"]

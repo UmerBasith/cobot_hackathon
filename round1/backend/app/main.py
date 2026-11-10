@@ -16,6 +16,8 @@ from .schemas import (Alert, AlertIn, AssignIn, AssignmentStatusIn, DuplicateIn,
 from .schemas import Analytics, Shelter, ShelterIn, TrackOut, Zone, ZoneIn
 from .seed import SEED, SIMULATE_FLOOD
 from .zones import SHELTERS_SEED, ZONES_SEED
+from . import golden
+from .heroes import make_heroes, nearby, needs_heroes
 from .severity import CATEGORY_LABELS, LEVELS, assess, level_for
 
 STATUSES = ["Reported", "Pending", "In Progress", "Resolved"]
@@ -47,7 +49,7 @@ def rescore(inc: dict) -> dict:
 def build_incident(seq: int, report: dict, status: str = "Reported", minutes_ago: int = 0, actor: str = "citizen") -> dict:
     created = now_iso(minutes_ago)
     inc = {**report, **assess(report), "id": f"INC-{seq}", "status": "Reported", "duplicate_of": None,
-           "witnesses": 0, "assignments": [],
+           "witnesses": 0, "assignments": [], "volunteers": [],
            "created_at": created, "updated_at": created,
            "timeline": [{"at": created, "status": "Reported", "note": "Report received", "actor": actor}]}
     # seed history: walk through the statuses up to the target one
@@ -88,6 +90,9 @@ def reset_data() -> int:
     db.clear_docs("team")
     db.clear_docs("alert")
     db.clear_docs("zone")
+    db.clear_docs("hero")
+    for h in make_heroes():
+        db.put_doc("hero", h)
     db.clear_docs("shelter")
     for area, st, note in ZONES_SEED:
         db.put_doc("zone", {"id": area, "area": area, "status": st, "note": note, "updated_at": now_iso()})
@@ -161,7 +166,11 @@ def create_incident(body: ReportIn) -> dict:
     report["title"], report["description"] = report["title"].strip(), report["description"].strip()
     if report.get("anonymous"):
         report["contact_name"], report["contact_phone"] = "", ""
-    return db.insert(lambda seq: build_incident(seq, report))
+    inc = db.insert(lambda seq: build_incident(seq, report))
+    if needs_heroes(inc):  # CPR Hero Network: alert the 3 nearest trained citizens automatically
+        alert_heroes(inc, 3, actor="system")
+        db.save(inc)
+    return inc
 
 
 @app.get("/api/incidents", response_model=list[Incident])
@@ -532,3 +541,153 @@ def analytics() -> dict:
         "team_performance": [{**{k: v for k, v in p.items() if k != "_eta"}, "avg_eta_min": _avg(p["_eta"])}
                              for p in perf.values()],
     }
+
+
+# ======================= Golden Hour Engine =======================
+@app.get("/api/golden-hour")
+def golden_hour() -> dict:
+    items = db.all_incidents()
+    teams = db.docs("team")
+    tmap = {t["id"]: t for t in teams}
+    rows = [r for i in items for r in [golden.row(i, tmap)] if r]
+    rows.sort(key=lambda r: -r["lives_lost_per_min_delay"])
+    p = golden.plan(items, teams)
+    return {"people_at_risk": sum(r["people_at_risk"] for r in rows),
+            "expected_survivors": round(sum(r["expected_survivors"] for r in rows), 2),
+            "lives_lost_per_min_delay": round(sum(r["lives_lost_per_min_delay"] for r in rows), 3),
+            "incidents": rows, "plan": p,
+            "method": "Survival = 95 % x 0.5^(minutes waiting / half-life). Half-life depends on the condition; CPR or "
+                      "first aid slows the fall; it stops when a team is on scene. Simplified demo assumptions."}
+
+
+@app.post("/api/golden-hour/apply")
+def golden_apply() -> dict:
+    p = golden.plan(db.all_incidents(), db.docs("team"))
+    done = []
+    for st in p["steps"]:
+        try:
+            assign(st["incident_id"], AssignIn(team_ids=[st["team_id"]]))
+            done.append(st)
+        except HTTPException:
+            continue
+    return {"assigned": len(done), "steps": done, "extra_lives": p["extra_lives"]}
+
+
+_SIM_CACHE: dict = {}
+
+
+@app.get("/api/golden-hour/simulation")
+def golden_simulation() -> dict:
+    if not _SIM_CACHE:
+        from .dispatch import make_teams
+        _SIM_CACHE.update(golden.simulate(make_teams()))
+    return _SIM_CACHE
+
+
+@app.get("/api/incidents/{inc_id}/survival")
+def incident_survival(inc_id: str) -> dict:
+    inc = get_or_404(inc_id)
+    c = golden.curve(inc, teams_by_id())
+    if not c:
+        return {"incident_id": inc["id"], "profile": None, "people_at_risk": 0, "points": [],
+                "profile_label": "No one at risk to life", "basis": "No injuries or life threat reported."}
+    return c
+
+
+# ======================= CPR Hero Network =======================
+def alert_heroes(inc: dict, count: int = 3, actor: str = "admin") -> list[dict]:
+    already = {v["id"] for v in inc.get("volunteers", [])}
+    busy = {v["id"] for i in db.all_incidents() if i["id"] != inc["id"] and i["status"] != "Resolved"
+            for v in i.get("volunteers", []) if v["status"] in ("accepted", "arrived", "cpr")}
+    picks = [n for n in nearby(inc, db.docs("hero")) if n["hero"]["id"] not in already and n["hero"]["id"] not in busy
+             and n["hero"]["available"]][:count]
+    at = now_iso()
+    inc.setdefault("volunteers", [])
+    for n in picks:
+        h = n["hero"]
+        inc["volunteers"].append({"id": h["id"], "name": h["name"], "skills": h["skills"], "status": "alerted",
+                                  "distance_m": n["distance_m"], "eta_min": n["eta_min"], "alerted_at": at,
+                                  "updated_at": at, "cpr_at": None})
+    if picks:
+        inc["timeline"].append({"at": at, "status": inc["status"], "actor": actor,
+                                "note": "CPR Hero Network: alerted " + ", ".join(
+                                    f"{n['hero']['name']} ({n['distance_m']} m)" for n in picks)})
+    return picks
+
+
+@app.get("/api/heroes")
+def list_heroes() -> list[dict]:
+    return db.docs("hero")
+
+
+@app.get("/api/incidents/{inc_id}/heroes")
+def incident_heroes(inc_id: str) -> dict:
+    inc = get_or_404(inc_id)
+    status = {v["id"]: v for v in inc.get("volunteers", [])}
+    return {"needs_heroes": needs_heroes(inc), "radius_m": 3000,
+            "responding": inc.get("volunteers", []),
+            "nearby": [{"id": n["hero"]["id"], "name": n["hero"]["name"], "skills": n["hero"]["skills"],
+                        "distance_m": n["distance_m"], "eta_min": n["eta_min"],
+                        "status": status.get(n["hero"]["id"], {}).get("status", "not alerted")}
+                       for n in nearby(inc, db.docs("hero"))]}
+
+
+@app.post("/api/incidents/{inc_id}/heroes/alert")
+def alert_incident_heroes(inc_id: str, count: int = 3) -> dict:
+    inc = get_or_404(inc_id)
+    if inc["status"] == "Resolved":
+        raise HTTPException(400, "Incident is resolved")
+    picks = alert_heroes(inc, max(1, min(count, 5)))
+    db.save(inc)
+    if not picks:
+        raise HTTPException(409, "No more available CPR heroes within 3 km")
+    return {"alerted": [p["hero"]["id"] for p in picks], "incident": inc}
+
+
+@app.get("/api/hero/{hero_id}")
+def hero_inbox(hero_id: str) -> dict:
+    hero = next((h for h in db.docs("hero") if h["id"] == hero_id.upper()), None)
+    if not hero:
+        raise HTTPException(404, f"Hero {hero_id} not found")
+    jobs = []
+    for inc in db.all_incidents():
+        for v in inc.get("volunteers", []):
+            if v["id"] == hero["id"] and v["status"] not in ("declined",) and inc["status"] != "Resolved":
+                jobs.append({"volunteer": v, "incident": {k: inc[k] for k in (
+                    "id", "title", "category", "area", "landmark", "lat", "lng", "severity", "score", "description",
+                    "people_affected", "life_threat", "injuries", "created_at", "status")}})
+    return {"hero": hero, "jobs": jobs}
+
+
+HERO_FLOW = {"accept": "accepted", "decline": "declined", "arrived": "arrived", "cpr": "cpr", "done": "done"}
+
+
+@app.post("/api/hero/{hero_id}/respond")
+def hero_respond(hero_id: str, body: dict) -> dict:
+    action = str(body.get("action", ""))
+    if action not in HERO_FLOW:
+        raise HTTPException(422, "action must be accept, decline, arrived, cpr or done")
+    inc = get_or_404(str(body.get("incident_id", "")))
+    v = next((v for v in inc.get("volunteers", []) if v["id"] == hero_id.upper()), None)
+    if not v:
+        raise HTTPException(404, "This hero was not alerted for this incident")
+    at = now_iso()
+    v["status"], v["updated_at"] = HERO_FLOW[action], at
+    if action == "cpr" and not v.get("cpr_at"):
+        v["cpr_at"] = at
+    note = {"accept": f"{v['name']} (CPR hero) is on the way — {v['distance_m']} m, ~{round(v['eta_min'])} min",
+            "decline": f"{v['name']} (CPR hero) cannot come",
+            "arrived": f"{v['name']} (CPR hero) arrived on scene",
+            "cpr": f"{v['name']} started CPR / first aid — survival decline slowed",
+            "done": f"{v['name']} handed over to the ambulance crew"}[action]
+    inc["timeline"].append({"at": at, "status": inc["status"], "note": note, "actor": "hero"})
+    inc["updated_at"] = at
+    if action == "decline":
+        alert_heroes(inc, 1, actor="system")
+    if action == "done":
+        for h in db.docs("hero"):
+            if h["id"] == v["id"]:
+                h["rescues"] = int(h.get("rescues", 0)) + 1
+                db.put_doc("hero", h)
+    db.save(inc)
+    return inc

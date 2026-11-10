@@ -19,6 +19,8 @@ import Alerts from "@/pages/Alerts";
 import Track from "@/pages/Track";
 import Analytics from "@/pages/Analytics";
 import Zones from "@/pages/Zones";
+import GoldenHour from "@/pages/GoldenHour";
+import Hero from "@/pages/Hero";
 
 function AdminReport() {
   return (
@@ -54,6 +56,7 @@ export default function App() {
           <Route path="/kit" element={<Kit />} />
           <Route path="/track" element={<Track />} />
           <Route path="/track/:id" element={<Track />} />
+          <Route path="/hero" element={<Hero />} />
           <Route path="/responder/login" element={<Login role="responder" />} />
           <Route path="/responder" element={<RequireRole role="responder"><Responder /></RequireRole>} />
           <Route path="/admin/login" element={<Login role="admin" />} />
@@ -68,6 +71,7 @@ export default function App() {
             <Route path="alerts" element={<Alerts />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="zones" element={<Zones />} />
+            <Route path="golden-hour" element={<GoldenHour />} />
           </Route>
           <Route path="*" element={<Home />} />
         </Routes>

@@ -2,7 +2,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
-import { AlertOctagon, AlertTriangle, BarChart3, Bell, BellRing, ChevronDown, ChevronRight, CloudRain, ExternalLink, Home, LayoutDashboard, ListOrdered, LogOut, Menu, Monitor, MoreHorizontal, PhoneCall, RotateCcw, Settings, Smartphone, Truck, Users, Wifi, X, type LucideIcon } from "lucide-react";
+import { AlertOctagon, AlertTriangle, BarChart3, Bell, BellRing, ChevronDown, ChevronRight, CloudRain, ExternalLink, HeartPulse, Home, LayoutDashboard, ListOrdered, LogOut, Menu, Monitor, MoreHorizontal, PhoneCall, RotateCcw, Settings, Smartphone, Truck, Users, Wifi, X, type LucideIcon } from "lucide-react";
 import { errText, getEscalations, getStats, getTeams, resetDemo, simulateFlood } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import type { Escalation, Stats, Team } from "@/lib/mock";
@@ -17,6 +17,7 @@ type NavItem = { to: string; label: string; icon: LucideIcon; badge?: "open" | "
 export const appNav: NavItem[] = [
   { to: "/admin", label: "Command Centre", icon: LayoutDashboard },
   { to: "/admin/incidents", label: "Incidents", icon: ListOrdered, badge: "open" },
+  { to: "/admin/golden-hour", label: "Golden Hour", icon: HeartPulse },
   { to: "/admin/teams", label: "Response Teams", icon: Users, badge: "teams" },
   { to: "/admin/alerts", label: "Alerts", icon: BellRing },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },

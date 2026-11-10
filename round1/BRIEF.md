@@ -93,7 +93,7 @@ Score = L + H + E + V + T, capped 100.
 - H hazard: small 5, medium 12, large 20, spreading 25.
 - E exposure (cap 20): people 0 → 0, 1–5 → 3, 6–20 → 7, 21–100 → 12, 100+ → 15; + place: critical place within 300 m (hospital 8, school/temple/station 6).
 - V vulnerable (cap 10): children 4, elderly 4, patients/disabled/pregnant 5 each.
-- T time-critical: active AND category in fire/gas_leak/flood/electrical/building_collapse, or medical with life threat/serious → 6; otherwise 2.
+- T time-critical (max 6): active AND category in fire/gas_leak/flood/electrical/building_collapse, or medical with life threat/serious → 6; otherwise 2.
 Levels: Critical ≥ 70 · High 45–69 · Medium 25–44 · Low < 25.
 Overrides (minimum level; final = higher):
 - R1 life_threat → Critical · R2 injured_count ≥ 5 → Critical · R3 hazard spreading at a critical place → Critical

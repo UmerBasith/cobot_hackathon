@@ -1,9 +1,10 @@
 /**
- * ONE place for all product text. Builders edit this first for a new problem.
+ * ONE place for all product text (ResQNet).
  * Icons are names from lucide-react (https://lucide.dev/icons).
  */
 import {
-  Brain, Zap, ShieldCheck, LineChart, Cpu, Workflow, Sparkles, Gauge, type LucideIcon,
+  Smartphone, Gauge, ListOrdered, MapPinned, ClipboardCheck, PhoneCall,
+  Send, Scale, Siren, Wrench, CheckCircle2, type LucideIcon,
 } from "lucide-react";
 
 export const team = {
@@ -13,40 +14,43 @@ export const team = {
 };
 
 export const product = {
-  name: "NovaSense",
-  tagline: "Turn raw signals into decisions in seconds.",
-  /** Headline is split so one phrase can get the gradient. */
-  headline: { before: "Smarter decisions,", highlight: "in real time.", after: "" },
+  name: "ResQNet",
+  tagline: "From report to rescue — every second counts.",
+  headline: { before: "Report it in seconds.", highlight: "Rescue it in minutes.", after: "" },
   subheadline:
-    "An AI-powered platform that watches your data, predicts problems before they happen and tells you exactly what to do next.",
-  primaryCta: "Launch dashboard",
-  secondaryCta: "See how it works",
+    "Citizens report an emergency with a few taps. A transparent rules engine sets the severity and explains why. The control room sees a live, ranked queue and map — and tracks every incident to resolution.",
+  primaryCta: "Report an emergency",
+  secondaryCta: "Open control room",
 };
 
+/** Honest numbers: these describe the product as built today (not field results). */
 export const stats: { value: number; suffix?: string; prefix?: string; label: string }[] = [
-  { value: 94, suffix: "%", label: "Prediction accuracy" },
-  { value: 3, suffix: "x", label: "Faster response" },
-  { value: 40, suffix: "%", label: "Lower cost" },
-  { value: 24, suffix: "/7", label: "Live monitoring" },
+  { value: 8, label: "Emergency categories" },
+  { value: 4, label: "Severity levels, rule-based" },
+  { value: 30, prefix: "< ", suffix: " s", label: "To file a report" },
+  { value: 5, suffix: " s", label: "Control-room refresh" },
 ];
 
 export const features: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: Brain, title: "AI predictions", text: "A trained model scores every new reading and flags risk early." },
-  { icon: Zap, title: "Real-time alerts", text: "Instant, prioritised alerts so the right person acts first." },
-  { icon: LineChart, title: "Live analytics", text: "Clear charts that show trends, not just numbers." },
-  { icon: ShieldCheck, title: "Safe by design", text: "Validated inputs, clear limits and an audit trail." },
-  { icon: Workflow, title: "Fits your workflow", text: "Upload a CSV or connect a sensor stream. No setup pain." },
-  { icon: Sparkles, title: "AI assistant", text: "Ask questions in plain English and get grounded answers." },
+  { icon: Smartphone, title: "Picture-first reporting", text: "Big category tiles, yes/no questions and a map tap. No login, works on any phone." },
+  { icon: Gauge, title: "Explainable severity", text: "Score 0–100 with every reason shown, e.g. “People trapped +35”. No black box." },
+  { icon: ListOrdered, title: "Ranked live queue", text: "Critical first, then score, then oldest. Critical incidents pulse red at the top." },
+  { icon: MapPinned, title: "Live incident map", text: "Every report on a Chennai map, coloured by severity. Click a dot to act." },
+  { icon: ClipboardCheck, title: "Track to resolution", text: "Reported → Pending → In Progress → Resolved, with notes and a full timeline." },
+  { icon: PhoneCall, title: "Supports 112, never replaces it", text: "A red “Call 112” button is always one tap away on every screen." },
 ];
 
 export const steps: { icon: LucideIcon; title: string; text: string }[] = [
-  { icon: Cpu, title: "Collect", text: "Data comes in from sensors, uploads or forms." },
-  { icon: Brain, title: "Analyse", text: "The model scores it and finds patterns." },
-  { icon: Gauge, title: "Decide", text: "The dashboard shows risk and the best next action." },
+  { icon: Send, title: "Report", text: "Tap a category, answer 3 questions, drop a pin." },
+  { icon: Scale, title: "Classify", text: "Rules score severity and list the reasons." },
+  { icon: Siren, title: "Prioritise", text: "Critical jumps to the top of the live queue." },
+  { icon: Wrench, title: "Manage", text: "Control room updates status with notes." },
+  { icon: CheckCircle2, title: "Resolve", text: "Closed, timestamped, fully auditable." },
 ];
 
 export const nav = [
-  { label: "Features", href: "/#features" },
+  { label: "Problem", href: "/#problem" },
   { label: "How it works", href: "/#how" },
-  { label: "Impact", href: "/#impact" },
+  { label: "Live demo", href: "/#demo" },
+  { label: "Features", href: "/#features" },
 ];

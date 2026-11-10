@@ -12,8 +12,8 @@
                 | 145 emerald | 85 amber | 30 orange | 15 red | 330 pink
    ------------------------------------------------------------------ */
 :root {
-  --brand-hue: 265;
-  --accent-hue: 195;
+  --brand-hue: 25;
+  --accent-hue: 230;
 
   --bg: oklch(0.985 0.003 var(--brand-hue));
   --surface: oklch(1 0 0);
@@ -115,3 +115,16 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ResQNet: pulsing ring for critical incidents (map dots, rows). */
+@keyframes sos-ring {
+  0% { transform: scale(1); opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+.sos-ring { animation: sos-ring 1.6s ease-out infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes crit-glow {
+  0%, 100% { box-shadow: inset 3px 0 0 #ef4444; }
+  50% { box-shadow: inset 3px 0 0 #ef4444, 0 0 0 9999px rgb(239 68 68 / 0.035) inset; }
+}
+.row-critical { animation: crit-glow 2.4s ease-in-out infinite; }
+.maplibregl-ctrl-attrib { font-size: 10px; }

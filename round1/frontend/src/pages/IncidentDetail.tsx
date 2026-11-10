@@ -7,6 +7,7 @@ import {
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, Select, Skeleton, Tabs, useToast } from "@/ui";
 import { CATEGORY_META, SeverityBadge, StatusBadge } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
+import { HeroCard, SurvivalCard } from "@/sections/Survival";
 import { DeleteModal } from "./Incidents";
 import { ASG_META, DispatchCard, SimilarCard, TeamIcon } from "@/sections/Dispatch";
 import { assignTeams, createAlert, deleteIncident, errText, getIncident, getIncidents, getSuggest, getTeams, markDuplicate, timeAgo, updateStatus } from "@/lib/resq";
@@ -247,6 +248,10 @@ export default function IncidentDetail() {
               </div>
             </CardBody>
           </Card>
+
+          {/* Golden Hour Engine + CPR Hero Network (§12) */}
+          <SurvivalCard incidentId={inc.id} className="xl:col-span-2" />
+          <HeroCard incidentId={inc.id} />
 
           {/* Workflow */}
           <Card className="rounded-2xl xl:col-span-2">

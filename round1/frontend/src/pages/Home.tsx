@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertTriangle, ArrowRight, Bell, LocateFixed, BriefcaseMedical, Building2, ChevronDown, ChevronRight, Flame, Map as MapIcon, MapPin,
+  AlertTriangle, ArrowRight, Bell, LocateFixed, BriefcaseMedical, Building2, ChevronDown, ChevronRight, Flame, HeartPulse, Map as MapIcon, MapPin,
   Megaphone, Mountain, MoreHorizontal, Shield, ShieldCheck, UserRound, Users, Waves, WifiOff, Zap, type LucideIcon,
 } from "lucide-react";
 import { CitizenShell, RED } from "@/sections/CitizenShell";
@@ -188,6 +188,19 @@ export default function Home() {
             </Link>
           ))}
         </div>
+      </section>
+
+      {/* ------------------------------------------------- CPR HERO NETWORK CTA */}
+      <section className="mx-auto max-w-7xl px-4 pb-6 md:px-6">
+        <Link to="/hero" className="group relative flex items-center gap-4 overflow-hidden rounded-2xl bg-gradient-to-r from-[#e53935] to-[#9f1239] p-4 text-white shadow-lg shadow-red-500/20 transition hover:-translate-y-0.5 md:p-5">
+          <HeartPulse className="pointer-events-none absolute -right-6 -bottom-8 size-36 opacity-15" strokeWidth={1.2} />
+          <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-white/15 ring-1 ring-white/25"><HeartPulse className="size-7" /></span>
+          <span className="relative min-w-0 flex-1">
+            <span className="block font-display text-lg font-bold">Become a CPR Hero</span>
+            <span className="block text-sm text-white/85">13 trained citizens in Chennai get alerted when someone nearby collapses — and arrive before the ambulance.</span>
+          </span>
+          <ChevronRight className="relative size-6 shrink-0 transition group-hover:translate-x-1" />
+        </Link>
       </section>
 
       {/* ------------------------------------------- SHORTCUTS + DISCOVER NEAR YOU */}

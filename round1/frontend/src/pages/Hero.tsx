@@ -104,6 +104,9 @@ function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
     alertBeep();
   }, [alerted]);
 
+  const activeKey = active ? `${active.incident.id}:${active.volunteer.status}` : "";
+  useEffect(() => { if (activeKey) window.scrollTo({ top: 0, behavior: "smooth" }); }, [activeKey]);
+
   async function act(job: HeroJob, action: HeroAction) {
     unlockAudio();
     setBusy(true);
@@ -140,7 +143,7 @@ function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
   return (
     <>
       <div className="mx-auto max-w-2xl space-y-4 px-4 py-5 md:py-8">
-        <HeroHeader hero={hero} available={available} onToggle={toggleAvailable} onSignOut={onSignOut} />
+        {!active && <HeroHeader hero={hero} available={available} onToggle={toggleAvailable} onSignOut={onSignOut}  />}
 
         {pendingOffDuty && (
           <button type="button" onClick={toggleAvailable} className="flex w-full items-center gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-left text-sm text-amber-900">
@@ -153,6 +156,7 @@ function HeroApp({ id, onSignOut }: { id: string; onSignOut: () => void }) {
         {active?.volunteer.status === "accepted" && <EnRoute job={active} hero={hero} busy={busy} onArrived={() => act(active, "arrived")} />}
         {active?.volunteer.status === "arrived" && <OnScene job={active} busy={busy} onStart={() => act(active, "cpr")} />}
         {active?.volunteer.status === "done" && <ThankYou job={active} hero={hero} onClose={() => dismiss(active.incident.id)} />}
+        {active && <HeroHeader hero={hero} available={available} onToggle={toggleAvailable} onSignOut={onSignOut} />}
         {!active && <Standby available={available} heroCount={heroCount} at={at} onPractice={() => { unlockAudio(); setPractice(true); }} />}
       </div>
 
@@ -404,7 +408,7 @@ function EnRoute({ job, hero, busy, onArrived }: { job: HeroJob; hero: HeroProfi
         <JobSummary job={job} />
         {hasLL && (
           <div className="overflow-hidden rounded-2xl ring-1 ring-slate-200 dark:ring-slate-800">
-            <LazyMap height={210} className="rounded-none border-0" followMe={false}
+            <LazyMap height={210} className="rounded-none border-0"
               me={{ lat: hero.lat, lng: hero.lng }}
               points={[{ id: i.id, lat: i.lat as number, lng: i.lng as number, severity: i.severity, title: i.title }]} />
           </div>
@@ -500,7 +504,7 @@ function CprGuide({ job, onDone }: { job?: HeroJob; onDone: () => void }) {
   const breaths = pos >= 30;
   const count = breaths ? 30 : pos + 1;
   const cycle = Math.floor(beat / (30 + BREATH_BEATS)) + 1;
-  const stepIdx = secs < 15 ? 1 : 2; // highlight the step they're on
+  const stepIdx = 2; // they are compressing: steps 1–2 done, step 3 active
 
   return (
     <motion.div initial={STATIC ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -567,7 +571,7 @@ function CprGuide({ job, onDone }: { job?: HeroJob; onDone: () => void }) {
           {CPR_STEPS.map((s, n) => (
             <li key={s.t} className={cn("flex items-center gap-3 rounded-xl px-3 py-2 text-sm", n === stepIdx ? "bg-white/12 ring-1 ring-white/20" : "text-white/60")}>
               {n < stepIdx ? <CheckCircle2 className="size-5 shrink-0 text-emerald-400" /> : <span className={cn("grid size-5 shrink-0 place-items-center rounded-full text-[11px] font-bold", n === stepIdx ? "bg-red-500 text-white" : "bg-white/15")}>{n + 1}</span>}
-              <span className={n === stepIdx ? "font-semibold text-white" : ""}>{s.t}{n === 2 && <span className="text-white/60"> — 5–6 cm, 100–120/min</span>}</span>
+              <span className={n === stepIdx ? "font-semibold text-white" : ""}>{s.t}</span>
             </li>
           ))}
         </ol>

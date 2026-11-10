@@ -4,6 +4,7 @@ import { AlertOctagon, ArrowRight, Bell, CheckCircle2, ClipboardList, Clock, Cop
 import { BarChartBox, Button, Card, CardBody, CardHeader, ChartLegend, DonutChartBox, EmptyState, Skeleton, useToast } from "@/ui";
 import { CATEGORIES, CATEGORY_META, CategoryIcon, SEV_HEX } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
+import { GoldenHourCard } from "@/sections/Survival";
 import { errText, getAnalytics, getEscalations, getIncidents, getStats, getTeams, getZones, resetDemo, simulateFlood } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { cn } from "@/lib/cn";
@@ -134,6 +135,8 @@ export default function Dashboard() {
           <Kpi icon={Users} tone="green" label="Teams Available" value={`${avail} / ${teams.length}`} sub={`${teams.filter((t) => t.status === "busy").length} on active missions`} />
         </>) : Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
       </div>
+
+      <GoldenHourCard />
 
       <div className="mt-4 grid gap-4 xl:grid-cols-5">
         <Card className="min-w-0 xl:col-span-3">

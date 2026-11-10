@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Copy, Gauge, ImagePlus, LayoutDashboard, MapPin, Minus,
+  AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Copy, Gauge, HeartPulse, ImagePlus, LayoutDashboard, MapPin, Minus,
   Pencil, Phone, Plus, Radar, Send, UserX, WifiOff, X,
 } from "lucide-react";
 import { useToast } from "@/ui";
@@ -664,6 +664,24 @@ function Result({ inc, local, admin, onNew }: { inc: Incident; local: boolean; a
                 {inc.reported_severity && <span className="text-xs text-slate-500">you said {inc.reported_severity}</span>}</div>
             </div>
           </div>
+          {(() => {
+            const vols = ((inc as Incident & { volunteers?: { id: string; name: string; status: string; distance_m: number; eta_min: number }[] }).volunteers ?? []).filter((v) => v.status !== "declined");
+            if (!vols.length) return null;
+            const eta = Math.max(1, Math.round(Math.min(...vols.map((v) => v.eta_min))));
+            return (
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-900 dark:bg-emerald-950/40">
+                <p className="flex items-center gap-2 font-semibold text-emerald-800 dark:text-emerald-300"><HeartPulse className="size-5 shrink-0" />{vols.length} CPR hero{vols.length > 1 ? "es" : ""} nearby {vols.length > 1 ? "were" : "was"} alerted — help may arrive in ~{eta} min</p>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {vols.map((v) => (
+                    <span key={v.id} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-emerald-200 dark:bg-slate-900 dark:text-slate-200 dark:ring-emerald-900">
+                      <span className="size-1.5 rounded-full bg-emerald-500" />{v.name} · {v.distance_m < 1000 ? `${Math.round(v.distance_m)} m` : `${(v.distance_m / 1000).toFixed(1)} km`}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-emerald-700/80 dark:text-emerald-400/80">Verified CPR-trained citizens. Stay with the person and keep them visible.</p>
+              </div>
+            );
+          })()}
           <div>
             <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">Why this priority</p>
             <ReasonsList reasons={inc.reasons} compact />

@@ -28,7 +28,21 @@ export interface IncidentMapProps {
   height?: number | string;
 }
 
-const STYLE = "https://tiles.openfreemap.org/styles/liberty";
+const OPENFREEMAP = "https://tiles.openfreemap.org/styles/liberty";
+const CARTO_KEY = (import.meta.env.VITE_CARTO_KEY as string | undefined)?.trim();
+/** CARTO Voyager raster tiles (needs a free key in .env: VITE_CARTO_KEY). Falls back to OpenFreeMap, then the SVG map. */
+const CARTO_STYLE: maplibregl.StyleSpecification | null = CARTO_KEY ? {
+  version: 8,
+  sources: {
+    voyager: {
+      type: "raster",
+      tiles: ["a", "b", "c", "d"].map((s) => `https://${s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png?key=${CARTO_KEY}`),
+      tileSize: 256, maxzoom: 20,
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    },
+  },
+  layers: [{ id: "voyager", type: "raster", source: "voyager" }],
+} : null;
 
 export default function IncidentMap(props: IncidentMapProps) {
   const [mode, setMode] = useState<"loading" | "map" | "fallback">(STATIC ? "fallback" : "loading");
@@ -77,12 +91,18 @@ function LiveMap({ teams = [], points = [], onSelect, onPick, picked, onMode, vi
     let loaded = false;
     let m: maplibregl.Map;
     try {
-      m = new maplibregl.Map({ container: ref.current, style: STYLE, center: CENTER, zoom: 10.3, attributionControl: { compact: true } });
+      m = new maplibregl.Map({ container: ref.current, style: CARTO_STYLE ?? OPENFREEMAP, center: CENTER, zoom: 10.3, attributionControl: { compact: true } });
     } catch { onMode("fallback"); return; }
     map.current = m;
     const timer = setTimeout(() => { if (!loaded) onMode("fallback"); }, 6000);
     m.on("load", () => { loaded = true; clearTimeout(timer); onMode("map"); m.resize(); });
-    m.on("error", () => { if (!loaded) { clearTimeout(timer); onMode("fallback"); } });
+    let usingCarto = !!CARTO_STYLE;
+    let tileErrors = 0;
+    m.on("error", () => {
+      // CARTO key rejected / unreachable -> switch to OpenFreeMap once; anything else before load -> SVG map
+      if (usingCarto && ++tileErrors >= 3) { usingCarto = false; m.setStyle(OPENFREEMAP); return; }
+      if (!loaded && !usingCarto) { clearTimeout(timer); onMode("fallback"); }
+    });
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     m.on("click", (e) => {
       if (!cb.current.onPick) return;

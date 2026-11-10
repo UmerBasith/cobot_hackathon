@@ -9,3 +9,7 @@ __pycache__/
 scratch-deck/
 .clock.json
 ~$*
+
+# local secrets (map API key)
+.env
+.env.local

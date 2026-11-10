@@ -13,6 +13,7 @@ import ReportPage from "@/pages/Report";
 import Kit from "@/pages/Kit";
 import Responder from "@/pages/Responder";
 import Teams from "@/pages/Teams";
+import TeamDetail from "@/pages/TeamDetail";
 import Alerts from "@/pages/Alerts";
 import Track from "@/pages/Track";
 import Analytics from "@/pages/Analytics";
@@ -48,6 +49,7 @@ export default function App() {
             <Route path="incidents/:id" element={<IncidentDetail />} />
             <Route path="report" element={<AdminReport />} />
             <Route path="teams" element={<Teams />} />
+            <Route path="teams/:id" element={<TeamDetail />} />
             <Route path="alerts" element={<Alerts />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="zones" element={<Zones />} />

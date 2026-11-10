@@ -1,41 +1,36 @@
 /** /track and /track/:id — citizen incident tracking (mobile-first, no contact details shown). */
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { motion } from "motion/react";
-import { ArrowRight, CheckCircle2, Clock, Copy, History, MapPin, Radar, Search, ShieldAlert, Siren, Timer, Truck } from "lucide-react";
-import { Badge, Button, Card, EmptyState, Input, Skeleton, Timeline } from "@/ui";
-import { CitizenHeader } from "./Report";
-import { Call112, CATEGORY_META, CategoryIcon, ReasonsList, SeverityBadge, SEV_HEX } from "@/sections/IncidentUI";
-import { ScoreRing } from "@/sections/ReportFlow";
-import { ASG_META, TeamIcon } from "@/sections/Dispatch";
+import { Ambulance, Calendar, Check, Clock, History, MapPin, Phone, Search, ShieldAlert, Timer } from "lucide-react";
+import { Skeleton } from "@/ui";
+import { CitizenShell, RED } from "@/sections/CitizenShell";
+import { CATEGORY_META, CategoryIcon, ReasonsList } from "@/sections/IncidentUI";
+import { LazyMap } from "@/sections/LazyMap";
 import { getTrack, timeAgo } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { fmtTime } from "@/lib/format";
+import { areaByName } from "@/lib/geo";
 import { cn } from "@/lib/cn";
-import { STATIC } from "@/lib/static";
-import { STATUSES, type TrackOut } from "@/lib/mock";
+import type { Severity, TrackOut } from "@/lib/mock";
 
-const STEP_TEXT = {
-  Reported: "Your report reached the control room.",
-  Pending: "Verified. A response team is being arranged.",
-  "In Progress": "Help is on the way or already on site.",
-  Resolved: "The incident is closed. Thank you for reporting.",
-} as const;
+type T = TrackOut & { lat?: number; lng?: number };
+const P: Record<Severity, string> = { Critical: "P1 – Critical", High: "P2 – High", Medium: "P3 – Medium", Low: "P4 – Low" };
+const PCLS: Record<Severity, string> = { Critical: "bg-red-600 text-white", High: "bg-orange-500 text-white", Medium: "bg-amber-400 text-amber-950", Low: "bg-emerald-600 text-white" };
+const STEPS = ["Reported", "Verified", "Assigned", "En Route", "On Scene", "Resolved"] as const;
 
 export default function Track() {
   const { id } = useParams();
   return (
-    <div className="min-h-screen bg-bg">
-      <CitizenHeader />
-      <main className="mx-auto max-w-3xl px-4 pt-6 pb-12">
-        <Lookup current={id} />
-        {id ? <Tracker id={id.toUpperCase()} /> : <Intro />}
+    <CitizenShell>
+      <Hero current={id} />
+      <main className="mx-auto max-w-6xl px-4 pb-12 md:px-6">
+        {id ? <Tracker id={id.toUpperCase()} /> : <Hint />}
       </main>
-    </div>
+    </CitizenShell>
   );
 }
 
-function Lookup({ current }: { current?: string }) {
+function Hero({ current }: { current?: string }) {
   const nav = useNavigate();
   const [v, setV] = useState(current ?? "");
   function go(e: FormEvent) {
@@ -45,143 +40,164 @@ function Lookup({ current }: { current?: string }) {
     if (x) nav(`/track/${encodeURIComponent(x)}`);
   }
   return (
-    <form onSubmit={go} className="mb-5">
-      {!current && (
-        <>
-          <h1 className="text-3xl font-semibold">Track your report</h1>
-          <p className="mt-1 mb-4 text-muted">Enter the reference ID you got after reporting, e.g. <span className="font-mono">INC-1012</span>.</p>
-        </>
-      )}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted" />
-          <Input value={v} onChange={(e) => setV(e.target.value)} placeholder="INC-1012" className="h-12 pl-9 font-mono text-base uppercase" aria-label="Reference ID" />
-        </div>
-        <Button type="submit" size="lg" icon={Radar}>Track</Button>
+    <section className="relative overflow-hidden bg-gradient-to-br from-rose-50 via-red-50/60 to-white dark:from-slate-900 dark:via-slate-900 dark:to-slate-950">
+      <svg viewBox="0 0 600 120" className="pointer-events-none absolute right-0 bottom-0 hidden h-28 w-[560px] text-rose-200/80 md:block dark:text-slate-800" fill="currentColor" aria-hidden>
+        <rect x="10" y="50" width="40" height="70" /><rect x="56" y="30" width="30" height="90" /><rect x="92" y="60" width="50" height="60" /><rect x="150" y="20" width="26" height="100" />
+        <path d="M182 120V40l24-20 24 20v80z" /><rect x="236" y="55" width="44" height="65" /><rect x="286" y="35" width="30" height="85" />
+        <g transform="translate(380 70)"><rect width="120" height="38" rx="6" /><rect x="84" y="-14" width="36" height="22" rx="4" /><circle cx="24" cy="42" r="10" fill="#fff" /><circle cx="96" cy="42" r="10" fill="#fff" /><rect x="40" y="10" width="22" height="6" fill="#fff" /><rect x="48" y="2" width="6" height="22" fill="#fff" /></g>
+      </svg>
+      <div className="relative mx-auto max-w-6xl px-4 py-8 md:px-6 md:py-12">
+        <h1 className="font-display text-3xl font-bold md:text-4xl">Track Your Incident</h1>
+        <p className="mt-1 text-slate-600 dark:text-slate-300">Enter your tracking ID to view real-time status and updates</p>
+        <form onSubmit={go} className="mt-5 flex max-w-xl gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2 text-slate-400" />
+            <input value={v} onChange={(e) => setV(e.target.value)} placeholder="e.g. INC-1012" aria-label="Tracking ID"
+              className="h-12 w-full rounded-xl border border-slate-200 bg-white pr-3 pl-12 font-mono text-base uppercase shadow-sm outline-none focus:border-red-300 focus:ring-4 focus:ring-red-100 dark:border-slate-700 dark:bg-slate-900" />
+          </div>
+          <button type="submit" className="h-12 rounded-xl px-6 font-semibold text-white shadow-lg shadow-red-500/25" style={{ background: RED }}>Track</button>
+        </form>
       </div>
-    </form>
+    </section>
   );
 }
 
-function Intro() {
+function Hint() {
   return (
-    <div className="grid gap-3 sm:grid-cols-3">
-      {[
-        { icon: Siren, t: "Live status", d: "Reported → Pending → In Progress → Resolved." },
-        { icon: Truck, t: "Teams on the way", d: "See which team is coming and its ETA." },
-        { icon: ShieldAlert, t: "Why this priority", d: "The same reasons the control room sees." },
-      ].map((x) => (
-        <Card key={x.t} className="p-5">
-          <x.icon className="size-5 text-brand-600" />
-          <p className="mt-3 font-semibold">{x.t}</p>
-          <p className="mt-1 text-sm text-muted">{x.d}</p>
-        </Card>
-      ))}
-      <div className="sm:col-span-3">
-        <Card className="flex flex-wrap items-center justify-between gap-3 p-5">
-          <p className="text-sm text-muted">Haven&apos;t reported yet?</p>
-          <Link to="/report"><Button iconRight={ArrowRight}>Report an emergency</Button></Link>
-        </Card>
-      </div>
+    <div className="mt-6 rounded-2xl border border-slate-100 bg-white p-6 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="font-semibold">Your tracking ID is on the confirmation screen after you report.</p>
+      <p className="mt-1 text-sm text-slate-500">Try <Link to="/track/INC-1012" className="font-mono font-semibold" style={{ color: RED }}>INC-1012</Link> · Haven&apos;t reported yet? <Link to="/report" className="font-semibold" style={{ color: RED }}>Report an emergency</Link></p>
     </div>
   );
 }
 
-function Tracker({ id }: { id: string }) {
-  const [t, , at] = usePoll<TrackOut | null>(() => getTrack(id), 5000, [id]);
-  if (t === null && at) {
-    return <EmptyState icon={Search} title={`No report found for ${id}`} text="Check the reference ID. It looks like INC-1012." action={<Link to="/report"><Button variant="outline">Report an emergency</Button></Link>} />;
-  }
-  if (!t) return <div className="space-y-4"><Skeleton className="h-48 rounded-2xl" /><Skeleton className="h-64 rounded-2xl" /></div>;
+function stepIndex(t: T) {
+  if (t.status === "Resolved") return 5;
+  const s = t.teams.filter((x) => x.status !== "rejected").map((x) => x.status);
+  if (s.includes("on_scene") || s.includes("completed")) return 4;
+  if (s.includes("en_route") || s.includes("accepted")) return 3;
+  if (s.length) return 2;
+  if (t.status === "Pending" || t.status === "In Progress") return 1;
+  return 0;
+}
 
-  const idx = STATUSES.indexOf(t.status);
-  const done = t.status === "Resolved";
+function Tracker({ id }: { id: string }) {
+  const [raw, , at] = usePoll<TrackOut | null>(() => getTrack(id), 5000, [id]);
+  const t = raw as T | null;
+  if (t === null && at) {
+    return (
+      <div className="mt-6 rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center dark:border-slate-700 dark:bg-slate-900">
+        <Search className="mx-auto size-8 text-slate-400" />
+        <p className="mt-3 font-semibold">No report found for {id}</p>
+        <p className="text-sm text-slate-500">Check the tracking ID. It looks like INC-1012.</p>
+      </div>
+    );
+  }
+  if (!t) return <div className="mt-6 space-y-4"><Skeleton className="h-48 rounded-2xl" /><Skeleton className="h-64 rounded-2xl" /></div>;
+
+  const idx = stepIndex(t);
   const active = t.teams.filter((x) => x.status !== "rejected");
+  const lead = active[0];
+  const geo = t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : areaByName(t.area) ?? { lat: 13.08, lng: 80.27 };
+  const firstAt = (s: string) => t.timeline.find((e) => e.status === s)?.at;
+  const stepTime: (string | undefined)[] = [t.created_at, firstAt("Pending"), idx >= 2 ? firstAt("In Progress") ?? t.updated_at : undefined, idx >= 3 ? firstAt("In Progress") ?? t.updated_at : undefined, idx >= 4 ? t.updated_at : undefined, firstAt("Resolved")];
+  const card = "rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
+
   return (
-    <div className="space-y-4">
-      <Card className="overflow-hidden">
-        <div className={cn("p-5 text-white", done ? "bg-gradient-to-br from-emerald-600 to-emerald-800" : t.severity === "Critical" ? "bg-gradient-to-br from-red-600 to-red-800" : "bg-gradient-to-br from-brand-600 to-brand-800")}>
-          <div className="flex items-start gap-3">
-            <CategoryIcon category={t.category} className="size-11 bg-white/20 text-white dark:bg-white/20 dark:text-white" />
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-1.5 font-mono text-sm text-white/80">{t.id}<button type="button" onClick={() => navigator.clipboard?.writeText(t.id)} aria-label="Copy ID"><Copy className="size-3.5" /></button> · {CATEGORY_META[t.category]?.label}</p>
-              <h2 className="mt-0.5 text-xl font-semibold leading-tight sm:text-2xl">{t.title}</h2>
-              <p className="mt-1 flex items-center gap-1 text-sm text-white/80"><MapPin className="size-3.5" />{t.area}{t.landmark ? ` · ${t.landmark}` : ""}</p>
+    <div className="-mt-4 space-y-4 md:-mt-6">
+      <div className={card}>
+        <div className="flex flex-wrap items-start gap-4">
+          <CategoryIcon category={t.category} className="size-14 rounded-2xl" />
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-2xl font-bold tracking-tight md:text-3xl">{t.id}</p>
+            <p className="font-semibold text-slate-700 dark:text-slate-200">{CATEGORY_META[t.category]?.label}</p>
+            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+              <span className="flex items-start gap-1"><MapPin className="mt-0.5 size-4 shrink-0" />{t.area}{t.landmark ? ` · ${t.landmark}` : ""}, Chennai</span>
+              <span className="flex items-start gap-1"><Calendar className="mt-0.5 size-4 shrink-0" />Reported {fmtTime(t.created_at)} ({timeAgo(t.created_at)})</span>
             </div>
           </div>
-          <p className="mt-4 text-lg font-semibold">{t.status === "In Progress" ? "Help is on the way" : t.status}</p>
-          <p className="text-sm text-white/85">{STEP_TEXT[t.status]}</p>
+          <span className={cn("rounded-full px-3 py-1 text-sm font-bold", PCLS[t.severity])}>{P[t.severity]}</span>
         </div>
-        <div className="p-5">
-          <div className="grid grid-cols-4 gap-2">
-            {STATUSES.map((s, k) => {
-              const reached = k <= idx;
+
+        <div className="mt-6 border-t border-slate-100 pt-6 dark:border-slate-800">
+          <ol className="flex flex-col gap-0 md:flex-row md:gap-0">
+            {STEPS.map((s, k) => {
+              const doneStep = k < idx || (k === idx && idx === 5);
+              const cur = k === idx && idx !== 5;
               return (
-                <div key={s} className="text-center">
-                  <div className="relative flex items-center">
-                    <div className={cn("h-1.5 flex-1 rounded-full", k === 0 ? "bg-transparent" : k <= idx ? "bg-emerald-500" : "bg-line")} />
-                    <motion.div initial={STATIC ? false : { scale: 0.6 }} animate={{ scale: 1 }}
-                      className={cn("relative grid size-9 shrink-0 place-items-center rounded-full text-sm font-semibold",
-                        k < idx || done ? "bg-emerald-500 text-white" : k === idx ? "bg-brand-600 text-white ring-4 ring-brand-500/20" : "bg-surface-2 text-muted")}>
-                      {k === idx && !done && !STATIC && <span className="absolute inset-0 animate-ping rounded-full bg-brand-500/30" />}
-                      {reached && (k < idx || done) ? <CheckCircle2 className="relative size-5" /> : <span className="relative">{k + 1}</span>}
-                    </motion.div>
-                    <div className={cn("h-1.5 flex-1 rounded-full", k === 3 ? "bg-transparent" : k < idx ? "bg-emerald-500" : "bg-line")} />
+                <li key={s} className="relative flex gap-3 pb-5 last:pb-0 md:flex-1 md:flex-col md:items-center md:gap-2 md:pb-0 md:text-center">
+                  {k < STEPS.length - 1 && <span className={cn("absolute top-9 bottom-0 left-[17px] w-0.5 md:top-[17px] md:right-[-50%] md:bottom-auto md:left-1/2 md:h-0.5 md:w-auto", k < idx ? "bg-emerald-500" : "bg-slate-200 dark:bg-slate-700")} />}
+                  <span className={cn("relative z-10 grid size-9 shrink-0 place-items-center rounded-full text-sm font-bold",
+                    doneStep ? "bg-emerald-500 text-white" : cur ? "bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900" : "bg-slate-100 text-slate-400 dark:bg-slate-800")}>
+                    {doneStep ? <Check className="size-5" strokeWidth={3} /> : k + 1}
+                  </span>
+                  <div className="pt-1 md:pt-0">
+                    <p className={cn("text-sm font-semibold", cur ? "text-blue-700 dark:text-blue-300" : doneStep ? "" : "text-slate-400")}>{s}</p>
+                    <p className="text-xs text-slate-500">
+                      {stepTime[k] && (doneStep || cur) ? fmtTime(stepTime[k]!) : cur ? "Now" : "—"}
+                      {s === "En Route" && cur && lead ? ` · ETA ${Math.round(lead.eta_min)} min` : ""}
+                    </p>
                   </div>
-                  <p className={cn("mt-2 text-[11px] leading-tight sm:text-xs", k === idx ? "font-semibold text-fg" : "text-muted")}>{s}</p>
-                </div>
+                </li>
               );
             })}
-          </div>
-          <p className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted"><Clock className="size-3.5" />Reported {timeAgo(t.created_at)} · last update {fmtTime(t.updated_at)}{at ? ` · live, checked ${fmtTime(at)}` : ""}</p>
+          </ol>
           {t.duplicate_of && (
-            <p className="mt-3 rounded-xl bg-surface-2 p-3 text-sm">This report was merged with <Link className="font-mono font-semibold text-brand-600 hover:underline dark:text-brand-300" to={`/track/${t.duplicate_of}`}>{t.duplicate_of}</Link> — the same incident reported by others. Track that one for updates.</p>
+            <p className="mt-5 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800">This report was merged with <Link className="font-mono font-semibold" style={{ color: RED }} to={`/track/${t.duplicate_of}`}>{t.duplicate_of}</Link> — the same incident reported by others.</p>
           )}
+          <p className="mt-4 flex items-center gap-1.5 text-xs text-slate-500"><Clock className="size-3.5" />Live · refreshes every 5 s{at ? ` · checked ${fmtTime(at)}` : ""}</p>
         </div>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-5">
-          <p className="mb-3 flex items-center gap-2 font-semibold"><Truck className="size-4 text-brand-600" />Teams on the way</p>
-          {active.length === 0 ? (
-            <p className="text-sm text-muted">{done ? "No team needed any more." : "A team will be assigned shortly. Critical reports are handled first."}</p>
-          ) : (
-            <div className="space-y-2">
-              {active.map((x, k) => (
-                <div key={k} className="flex items-center gap-3 rounded-xl bg-surface-2 p-3">
-                  <TeamIcon type={x.team_type} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{x.team_name}</p>
-                    <p className="flex items-center gap-1 text-xs text-muted"><Timer className="size-3" />ETA about {Math.round(x.eta_min)} min</p>
-                  </div>
-                  <Badge tone={ASG_META[x.status].tone} dot pulse={x.status === "en_route"}>{ASG_META[x.status].label}</Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-        <Card className="p-5">
-          <p className="mb-3 flex items-center gap-2 font-semibold"><ShieldAlert className="size-4 text-brand-600" />Priority</p>
-          <div className="mb-3 flex items-center gap-3">
-            <ScoreRing score={t.score} color={SEV_HEX[t.severity]} size={56} />
-            <div><SeverityBadge severity={t.severity} /><p className="mt-1 text-xs text-muted">Set by transparent rules</p></div>
-          </div>
-          <ReasonsList reasons={t.reasons.slice(0, 4)} compact />
-        </Card>
       </div>
 
-      <Card className="p-5">
-        <p className="mb-4 flex items-center gap-2 font-semibold"><History className="size-4 text-brand-600" />Updates</p>
-        <Timeline items={[...t.timeline].reverse().map((e) => ({
-          title: e.status, time: fmtTime(e.at), text: e.note,
-          tone: e.status === "Resolved" ? "green" : e.status === "In Progress" ? "brand" : e.status === "Pending" ? "amber" : "red",
-        }))} />
-      </Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className={card}>
+          <p className="mb-3 flex items-center gap-2 font-semibold"><Ambulance className="size-5 text-blue-700" />Assigned Response</p>
+          {lead ? (
+            <>
+              <p className="text-lg font-semibold leading-tight">{lead.team_name}</p>
+              {active.length > 1 && <p className="text-xs text-slate-500">+{active.length - 1} more team{active.length > 2 ? "s" : ""}</p>}
+              <div className="mt-3 rounded-xl bg-blue-50 p-3 dark:bg-blue-950/40">
+                <p className="text-xs text-blue-800 dark:text-blue-300">Estimated Arrival</p>
+                <p className="flex items-center gap-1.5 font-display text-2xl font-bold text-blue-900 dark:text-blue-100"><Timer className="size-5" />~{Math.round(lead.eta_min)} minutes</p>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">{t.status === "Resolved" ? "No team needed any more." : "A team will be assigned shortly. Critical reports are handled first."}</p>
+          )}
+          <a href="tel:112" className="mt-4 flex items-center justify-center gap-2 rounded-xl py-2.5 font-semibold text-white" style={{ background: RED }}><Phone className="size-4" />Call 112</a>
+        </div>
 
-      <Card className="flex flex-wrap items-center justify-between gap-3 border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950/40">
-        <p className="text-sm text-red-900 dark:text-red-100"><b>Situation got worse?</b> Call 112 immediately.</p>
-        <Call112 />
-      </Card>
+        <div className={card}>
+          <p className="mb-3 flex items-center gap-2 font-semibold"><MapPin className="size-5" style={{ color: RED }} />Incident Location</p>
+          <div className="overflow-hidden rounded-xl">
+            <LazyMap points={[{ id: t.id, lat: geo.lat, lng: geo.lng, severity: t.severity, title: t.title, resolved: t.status === "Resolved" }]} height={160} />
+          </div>
+          <a href={`https://www.openstreetmap.org/?mlat=${geo.lat}&mlon=${geo.lng}#map=16/${geo.lat}/${geo.lng}`} target="_blank" rel="noreferrer"
+            className="mt-3 flex items-center justify-center gap-2 rounded-xl border-2 border-blue-800 py-2 text-sm font-semibold text-blue-900 dark:text-blue-200">
+            <MapPin className="size-4" />View on Map
+          </a>
+        </div>
+
+        <div className={card}>
+          <p className="mb-3 flex items-center gap-2 font-semibold"><History className="size-5 text-emerald-600" />Latest Update</p>
+          <ul className="space-y-3">
+            {[...t.timeline].reverse().slice(0, 3).map((e, k) => (
+              <li key={k} className="flex gap-3">
+                <span className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", k === 0 ? "bg-emerald-500" : "bg-slate-300")} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium leading-snug">{e.note || e.status}</p>
+                  <p className="text-xs text-slate-500">{e.status} · {fmtTime(e.at)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className={card}>
+        <p className="mb-3 flex flex-wrap items-center gap-x-2 font-semibold"><ShieldAlert className="size-5" style={{ color: RED }} />Why this priority <span className="w-full text-xs font-normal text-slate-500 sm:w-auto">· score {Math.round(t.score)}/100, set by transparent rules</span></p>
+        <ReasonsList reasons={t.reasons.slice(0, 4)} compact />
+      </div>
     </div>
   );
 }

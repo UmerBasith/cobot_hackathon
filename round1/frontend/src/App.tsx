@@ -3,6 +3,9 @@ import { ToastProvider } from "@/ui";
 import { AppShell, PageIntro } from "@/sections/AppShell";
 import { ReportFlow } from "@/sections/ReportFlow";
 import Home from "@/pages/Home";
+import About from "@/pages/About";
+import Services from "@/pages/Services";
+import CitizenAlerts from "@/pages/CitizenAlerts";
 import Dashboard from "@/pages/Dashboard";
 import Incidents from "@/pages/Incidents";
 import IncidentDetail from "@/pages/IncidentDetail";
@@ -31,6 +34,9 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/alerts" element={<CitizenAlerts />} />
           <Route path="/report" element={<ReportPage />} />
           <Route path="/kit" element={<Kit />} />
           <Route path="/responder" element={<Responder />} />

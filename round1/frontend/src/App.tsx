@@ -1,24 +1,37 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ToastProvider } from "@/ui";
-import { AppShell } from "@/sections/AppShell";
+import { AppShell, PageIntro } from "@/sections/AppShell";
+import { ReportFlow } from "@/sections/ReportFlow";
 import Home from "@/pages/Home";
 import Dashboard from "@/pages/Dashboard";
+import Incidents from "@/pages/Incidents";
+import IncidentDetail from "@/pages/IncidentDetail";
+import ReportPage from "@/pages/Report";
 import Kit from "@/pages/Kit";
-import { AssistantPage, SettingsPage, SimulatePage } from "@/pages/AppPages";
 
-/** Routes: "/" landing, "/app/*" product dashboard, "/kit" component showcase. */
+function AdminReport() {
+  return (
+    <>
+      <PageIntro title="New report" text="Call-taker mode: enter an emergency reported by phone. Severity is scored live." />
+      <ReportFlow admin />
+    </>
+  );
+}
+
+/** Routes: "/" landing, "/report" citizen, "/app/*" control room, "/kit" component showcase. */
 export default function App() {
   return (
     <ToastProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/report" element={<ReportPage />} />
           <Route path="/kit" element={<Kit />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Dashboard />} />
-            <Route path="simulate" element={<SimulatePage />} />
-            <Route path="assistant" element={<AssistantPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="incidents" element={<Incidents />} />
+            <Route path="incidents/:id" element={<IncidentDetail />} />
+            <Route path="report" element={<AdminReport />} />
           </Route>
           <Route path="*" element={<Home />} />
         </Routes>

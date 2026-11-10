@@ -8,7 +8,7 @@ export function Reveal({ children, delay = 0, y = 24, className }: { children: R
   return (
     <motion.div
       className={className}
-      initial={{ opacity: 0, y }}
+      initial={STATIC ? false : { opacity: 0, y }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] }}
@@ -27,7 +27,7 @@ const item: Variants = {
 /** Wrap a grid with <Stagger>, and each child with <StaggerItem>. */
 export function Stagger({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <motion.div className={className} variants={container} initial="hidden" whileInView="show" viewport={{ once: true, margin: "-60px" }}>
+    <motion.div className={className} variants={container} initial={STATIC ? false : "hidden"} whileInView="show" viewport={{ once: true, margin: "-60px" }}>
       {children}
     </motion.div>
   );

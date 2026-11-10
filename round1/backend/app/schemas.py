@@ -62,10 +62,41 @@ class TimelineEntry(BaseModel):
     actor: str
 
 
+class Team(BaseModel):
+    id: str
+    name: str
+    type: Literal["fire", "ambulance_als", "ambulance_bls", "police", "ndrf", "boat"]
+    type_label: str
+    station: str
+    lat: float
+    lng: float
+    status: Literal["available", "busy", "offline"]
+    current_incident: str | None = None
+
+
+AssignmentStatus = Literal["assigned", "accepted", "rejected", "en_route", "on_scene", "completed"]
+
+
+class Assignment(BaseModel):
+    id: str
+    team_id: str
+    team_name: str
+    team_type: str
+    status: AssignmentStatus
+    eta_min: float
+    distance_km: float
+    reject_reason: str = ""
+    note: str = ""
+    assigned_at: str
+    updated_at: str
+
+
 class Incident(ReportIn, SeverityOut):
     id: str
     status: Status
     duplicate_of: str | None = None
+    witnesses: int = 0
+    assignments: list[Assignment] = []
     created_at: str
     updated_at: str
     timeline: list[TimelineEntry]
@@ -106,3 +137,66 @@ class Stats(BaseModel):
     by_category: list[CategoryCount]
     by_severity: list[SeverityCount]
     by_area: list[AreaCount]
+
+
+class Candidate(BaseModel):
+    team: Team
+    eta_min: float
+    distance_km: float
+
+
+class SuggestSlot(BaseModel):
+    slot: str
+    best: str | None
+    candidates: list[Candidate]
+
+
+class AssignIn(BaseModel):
+    team_ids: list[str] = Field(min_length=1, max_length=10)
+
+
+class RespondIn(BaseModel):
+    accept: bool
+    reason: str = Field(default="", max_length=200)
+
+
+class AssignmentStatusIn(BaseModel):
+    status: Literal["en_route", "on_scene", "completed"]
+    note: str = Field(default="", max_length=500)
+
+
+class ResponderJob(BaseModel):
+    assignment: Assignment
+    incident: Incident
+
+
+class Escalation(BaseModel):
+    level: Literal["critical", "warning"]
+    incident_id: str | None
+    message: str
+
+
+class Similar(BaseModel):
+    id: str
+    title: str
+    severity: Severity
+    status: Status
+    distance_m: int
+    minutes_apart: int
+
+
+class AlertIn(BaseModel):
+    area: str = Field(min_length=1, max_length=80)  # area name or "All Chennai"
+    message: str = Field(min_length=5, max_length=300)
+    level: Literal["info", "warning", "danger"] = "warning"
+    hours: float = Field(default=6, gt=0, le=72)
+
+
+class Alert(AlertIn):
+    id: str
+    created_at: str
+    expires_at: str
+
+
+class SimulateIn(BaseModel):
+    scenario: Literal["chennai_flood"] = "chennai_flood"

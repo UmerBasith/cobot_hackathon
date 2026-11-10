@@ -1,4 +1,4 @@
-import { CTA, Features, Footer, Hero, HowItWorks, Impact, Navbar } from "@/sections/Landing";
+import { Categories, CTA, Features, Footer, Hero, HowItWorks, Impact, LiveDemo, Navbar, Problem, Team } from "@/sections/Landing";
 
 export default function Home() {
   return (
@@ -6,9 +6,13 @@ export default function Home() {
       <Navbar />
       <main>
         <Hero />
-        <Features />
+        <Problem />
         <HowItWorks />
+        <LiveDemo />
+        <Categories />
+        <Features />
         <Impact />
+        <Team />
         <CTA />
       </main>
       <Footer />

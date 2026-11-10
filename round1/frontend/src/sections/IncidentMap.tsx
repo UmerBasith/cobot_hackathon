@@ -108,14 +108,14 @@ function SvgMap({ points = [], onSelect, onPick, picked }: IncidentMapProps) {
   const [hover, setHover] = useState<string | null>(null);
   const coast = useMemo(() => COAST.map(([la, ln]) => project(la, ln, W, H)), []);
   const coastPath = coast.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  const sea = `${coastPath} L${W},${H} L${W},0 Z`;
+  const sea = `M${coast[0].x},-3000 ${coastPath.slice(1).replace(/^/, "L")} L${coast[coast.length - 1].x},${H + 3000} L${W + 3000},${H + 3000} L${W + 3000},-3000 Z`;
   const river = (pts: [number, number][]) => pts.map(([la, ln], i) => { const p = project(la, ln, W, H); return `${i ? "L" : "M"}${p.x},${p.y}`; }).join(" ");
 
   function click(e: React.MouseEvent<SVGSVGElement>) {
     if (!onPick) return;
     const svg = e.currentTarget; const r = svg.getBoundingClientRect();
-    // account for preserveAspectRatio="xMidYMid slice"
-    const s = Math.max(r.width / W, r.height / H);
+    // account for preserveAspectRatio="xMidYMid meet"
+    const s = Math.min(r.width / W, r.height / H);
     const ox = (r.width - W * s) / 2, oy = (r.height - H * s) / 2;
     const x = (e.clientX - r.left - ox) / s, y = (e.clientY - r.top - oy) / s;
     const ll = unproject(x, y, W, H);
@@ -124,13 +124,13 @@ function SvgMap({ points = [], onSelect, onPick, picked }: IncidentMapProps) {
   const pk = picked ? project(picked.lat, picked.lng, W, H) : null;
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" className={cn("absolute inset-0 size-full", onPick && "cursor-crosshair")} onClick={click}>
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" className={cn("absolute inset-0 size-full", onPick && "cursor-crosshair")} onClick={click}>
       <defs>
         <pattern id="mgrid" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0H0V30" fill="none" stroke="var(--line)" strokeWidth="0.6" /></pattern>
         <linearGradient id="seag" x1="0" x2="1"><stop offset="0" stopColor="#7dd3fc" stopOpacity="0.45" /><stop offset="1" stopColor="#38bdf8" stopOpacity="0.25" /></linearGradient>
       </defs>
-      <rect width={W} height={H} fill="var(--surface)" />
-      <rect width={W} height={H} fill="url(#mgrid)" />
+      <rect x={-3000} y={-3000} width={W + 6000} height={H + 6000} fill="var(--surface)" />
+      <rect x={-3000} y={-3000} width={W + 6000} height={H + 6000} fill="url(#mgrid)" />
       {/* main roads (schematic) */}
       <g stroke="var(--line)" strokeWidth="5" fill="none" strokeLinecap="round" opacity="0.9">
         <path d={river([[13.07, 80.26], [13.04, 80.234], [13.0, 80.22], [12.95, 80.146], [12.92, 80.1], [12.89, 80.081]])} />
@@ -144,7 +144,7 @@ function SvgMap({ points = [], onSelect, onPick, picked }: IncidentMapProps) {
         <path d={river([[13.09, 80.15], [13.08, 80.2], [13.078, 80.24], [13.08, 80.29]])} />
       </g>
       <path d={sea} fill="url(#seag)" />
-      <path d={coastPath} fill="none" stroke="#0ea5e9" strokeWidth="2" opacity="0.7" />
+      <path d={`M${coast[0].x},-3000 L${coastPath.slice(1)} L${coast[coast.length - 1].x},${H + 3000}`} fill="none" stroke="#0ea5e9" strokeWidth="2" opacity="0.7" />
       <text x={W - 18} y={H * 0.55} textAnchor="end" className="fill-sky-600" style={{ font: "italic 600 13px Inter Variable" }} opacity="0.75">Bay of Bengal</text>
       {/* areas */}
       {AREAS.map((a) => {
@@ -188,7 +188,7 @@ function SvgMap({ points = [], onSelect, onPick, picked }: IncidentMapProps) {
           <circle cy="-21" r="4" fill="white" />
         </g>
       )}
-      <text x="10" y={H - 10} style={{ font: "500 10px Inter Variable" }} fill="var(--muted)">Schematic map · Chennai (offline fallback)</text>
+      <text x="10" y={H - 6} style={{ font: "500 10px Inter Variable" }} fill="var(--muted)">Schematic map · Chennai (offline fallback)</text>
     </svg>
   );
 }

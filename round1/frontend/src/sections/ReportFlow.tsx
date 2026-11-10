@@ -80,11 +80,11 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
     setBusy(true);
     try {
       const inc = await createIncident(f);
-      setDone({ inc, local: false });
+      setDone({ inc, local: false }); window.scrollTo({ top: 0 });
       toast(inc.severity === "Critical" ? "warning" : "success", `Report ${inc.id} received`, `Severity ${inc.severity} (${inc.score}/100)`);
     } catch {
       const inc = mockCreate(f);
-      setDone({ inc, local: true });
+      setDone({ inc, local: true }); window.scrollTo({ top: 0 });
       toast("warning", "Server not reachable", "Saved locally (demo). Please also call 112.");
     } finally { setBusy(false); }
   }
@@ -268,7 +268,7 @@ export function ScoreRing({ score, color, size = 64 }: { score: number; color: s
         <circle cx="32" cy="32" r={r} fill="none" stroke={color} strokeWidth="7" strokeLinecap="round" strokeDasharray={c}
           strokeDashoffset={c - (Math.min(100, score) / 100) * c} style={{ transition: "stroke-dashoffset .5s ease, stroke .3s" }} />
       </svg>
-      <span className="absolute font-display text-lg font-semibold tabular-nums">{score}</span>
+      <span className="absolute font-display font-semibold tabular-nums" style={{ fontSize: Math.round(size * 0.3) }}>{score}</span>
     </div>
   );
 }

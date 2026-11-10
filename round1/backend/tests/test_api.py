@@ -116,3 +116,56 @@ def test_preview_and_filters(client):
 
 def test_reset(client):
     assert client.post("/api/reset").json()["incidents"] == 12
+
+
+# ---------- Round 2: dispatch, responder, duplicates, escalation, alerts ----------
+def test_teams_seeded_and_some_busy(client):
+    teams = client.get("/api/teams").json()
+    assert len(teams) == 12 and any(t["status"] == "busy" for t in teams)
+
+
+def test_suggest_assign_reject_accept_complete(client):
+    inc = client.post("/api/incidents", json=report(category="building_collapse", life_threat=True, area="Velachery",
+                                                     lat=12.98, lng=80.218)).json()
+    slots = client.get(f"/api/incidents/{inc['id']}/suggest").json()
+    assert [s["slot"] for s in slots] == ["Search & rescue", "Fire engine", "Ambulance"]
+    ids = [s["best"] for s in slots if s["best"]]
+    assert len(ids) == len(set(ids)) >= 2
+    out = client.post(f"/api/incidents/{inc['id']}/assign", json={"team_ids": ids}).json()
+    assert out["status"] == "In Progress" and len(out["assignments"]) == len(ids)
+    assert client.post(f"/api/incidents/{inc['id']}/assign", json={"team_ids": ids[:1]}).status_code == 409
+    first, second = out["assignments"][0], out["assignments"][1]
+    rej = client.post(f"/api/assignments/{first['id']}/respond", json={"accept": False, "reason": "No equipment"}).json()
+    assert rej["assignments"][0]["status"] == "rejected"
+    assert client.get("/api/teams").json()  # team freed
+    assert next(t for t in client.get("/api/teams").json() if t["id"] == first["team_id"])["status"] == "available"
+    client.post(f"/api/assignments/{second['id']}/respond", json={"accept": True})
+    assert client.get(f"/api/responder/{second['team_id']}").json()[0]["assignment"]["status"] == "accepted"
+    client.post(f"/api/assignments/{second['id']}/status", json={"status": "en_route"})
+    client.post(f"/api/assignments/{second['id']}/status", json={"status": "on_scene"})
+    assert client.post(f"/api/assignments/{second['id']}/status", json={"status": "completed"}).status_code == 422
+    done = client.post(f"/api/assignments/{second['id']}/status", json={"status": "completed", "note": "All rescued"}).json()
+    assert done["assignments"][1]["status"] == "completed"
+
+
+def test_duplicates_raise_witnesses_and_severity(client):
+    base = report(category="fire", hazard="medium", area="Egmore", lat=13.0732, lng=80.2609, active=False, people_affected=3)
+    main = client.post("/api/incidents", json=base).json()
+    dups = [client.post("/api/incidents", json=base).json() for _ in range(2)]
+    assert any(s["id"] == dups[0]["id"] for s in client.get(f"/api/incidents/{main['id']}/similar").json())
+    for d in dups:
+        client.post(f"/api/incidents/{d['id']}/duplicate", json={"duplicate_of": main["id"]})
+    m = client.get(f"/api/incidents/{main['id']}").json()
+    assert m["witnesses"] == 2 and m["score"] == main["score"] + 6
+    assert any(r["rule"] == "R8" for r in m["reasons"])
+
+
+def test_alerts_simulate_escalations(client):
+    a = client.post("/api/alerts", json={"area": "Adyar", "message": "Move to higher ground now", "level": "danger"})
+    assert a.status_code == 201
+    assert any(x["area"] == "Adyar" for x in client.get("/api/alerts/active", params={"area": "Adyar"}).json())
+    n = client.get("/api/stats").json()["total"]
+    sim = client.post("/api/simulate", json={"scenario": "chennai_flood"}).json()
+    assert client.get("/api/stats").json()["total"] == n + len(sim["created"])
+    esc = client.get("/api/escalations").json()
+    assert any(e["level"] == "critical" for e in esc)

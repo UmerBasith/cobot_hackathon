@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { AlertOctagon, ArrowRight, CheckCircle2, Clock, Inbox, LayoutGrid, Map as MapIcon, PieChart, Plus, RefreshCw, Siren } from "lucide-react";
 import { Badge, BarChartBox, Button, Card, CardBody, CardHeader, ChartLegend, DonutChartBox, EmptyState, Skeleton, StatTile } from "@/ui";
 import { PageIntro } from "@/sections/AppShell";
-import { CategoryIcon, SEV_HEX, SeverityBadge, StatusBadge } from "@/sections/IncidentUI";
+import { CATEGORY_META, CategoryIcon, SEV_HEX, SeverityBadge, StatusBadge } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
 import { getIncidents, getStats, timeAgo } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
@@ -23,7 +23,7 @@ export default function Dashboard() {
   const points = (list ?? []).filter((i) => i.lat != null && i.lng != null)
     .map((i) => ({ id: i.id, lat: i.lat!, lng: i.lng!, severity: i.severity, title: i.title, resolved: i.status === "Resolved" }));
   const sevData = SEV_ORDER.map((s) => ({ name: s, value: stats?.by_severity.find((x) => x.severity === s)?.count ?? 0 }));
-  const catData = (stats?.by_category ?? []).map((c) => ({ label: c.label.replace(" Emergency", "").replace(" Hazard", ""), Incidents: c.count }));
+  const catData = (stats?.by_category ?? []).map((c) => ({ label: CATEGORY_META[c.category]?.short ?? c.label, Incidents: c.count }));
 
   return (
     <>
@@ -46,12 +46,12 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+        <Card className="min-w-0 xl:col-span-2">
           <CardHeader title="Live incident map" subtitle="Colour = severity · click a dot to open" icon={MapIcon}
             action={<div className="hidden gap-3 text-xs text-muted sm:flex">{SEV_ORDER.map((s) => <span key={s} className="flex items-center gap-1"><span className="size-2.5 rounded-full" style={{ background: SEV_HEX[s] }} />{s}</span>)}</div>} />
           <CardBody><LazyMap height={420} points={points} onSelect={(id) => nav(`/app/incidents/${id}`)} /></CardBody>
         </Card>
-        <Card className="flex flex-col">
+        <Card className="flex min-w-0 flex-col">
           <CardHeader title="Needs attention" subtitle="Open Critical & High, highest first" icon={Siren}
             action={<Badge tone="red" dot pulse>{attention.length}</Badge>} />
           <CardBody className="flex-1 space-y-2">
@@ -75,7 +75,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+        <Card className="min-w-0 xl:col-span-2">
           <CardHeader title="Incidents by category" subtitle="All reports, all statuses" icon={LayoutGrid} />
           <CardBody>{stats ? <BarChartBox data={catData} x="label" series={[{ key: "Incidents", color: "var(--color-brand-500)" }]} height={280} /> : <Skeleton className="h-[280px]" />}</CardBody>
         </Card>
@@ -96,7 +96,7 @@ export default function Dashboard() {
           {[...(list ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5).map((i) => (
             <Link key={i.id} to={`/app/incidents/${i.id}`} className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-surface-2">
               <CategoryIcon category={i.category} className="size-8" />
-              <span className="w-20 shrink-0 font-mono text-xs text-muted">{i.id}</span>
+              <span className="hidden w-20 shrink-0 font-mono text-xs text-muted sm:block">{i.id}</span>
               <span className="min-w-0 flex-1 truncate text-sm">{i.title}</span>
               <span className="hidden text-xs text-muted sm:block">{timeAgo(i.created_at)}</span>
               <StatusBadge status={i.status} />

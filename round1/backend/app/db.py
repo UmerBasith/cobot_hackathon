@@ -56,3 +56,26 @@ def delete(inc_id: str) -> bool:
 def clear() -> None:
     with _lock, conn() as c:
         c.execute("DELETE FROM incidents")
+
+
+# ---- generic documents (teams, alerts) ----
+def _docs(c: sqlite3.Connection) -> None:
+    c.execute("CREATE TABLE IF NOT EXISTS docs (kind TEXT, id TEXT, data TEXT NOT NULL, PRIMARY KEY (kind, id))")
+
+
+def docs(kind: str) -> list[dict]:
+    with conn() as c:
+        _docs(c)
+        return [json.loads(r["data"]) for r in c.execute("SELECT data FROM docs WHERE kind = ? ORDER BY rowid", (kind,))]
+
+
+def put_doc(kind: str, doc: dict) -> None:
+    with _lock, conn() as c:
+        _docs(c)
+        c.execute("INSERT OR REPLACE INTO docs (kind, id, data) VALUES (?, ?, ?)", (kind, doc["id"], json.dumps(doc)))
+
+
+def clear_docs(kind: str) -> None:
+    with _lock, conn() as c:
+        _docs(c)
+        c.execute("DELETE FROM docs WHERE kind = ?", (kind,))

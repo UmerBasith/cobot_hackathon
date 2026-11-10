@@ -117,3 +117,38 @@ Areas (lat, lng): T. Nagar 13.0418,80.2341 · Mylapore 13.0368,80.2676 · Adyar 
 3. `/app`: tiles update, new critical at top, red pulsing dot on map, by-category chart.
 4. Open it → reasons → Pending → In Progress → Resolved, timeline. Mark a test report as duplicate / delete it.
 5. Close: "rules decide, humans manage, every incident tracked to resolution."
+
+## 10. ROUND 2 FEATURES (added to the SAME app — Round 1 features stay top priority, never break them)
+Backend is DONE and live (24 tests pass). Additive fields on `Incident`: `witnesses: int`, `assignments: Assignment[]`.
+
+Types:
+- `Team` = `{id, name, type: "fire"|"ambulance_als"|"ambulance_bls"|"police"|"ndrf"|"boat", type_label, station, lat, lng, status: "available"|"busy"|"offline", current_incident: string|null}`
+- `Assignment` = `{id: "ASG-1012-1", team_id, team_name, team_type, status: "assigned"|"accepted"|"rejected"|"en_route"|"on_scene"|"completed", eta_min, distance_km, reject_reason, note, assigned_at, updated_at}`
+- `SuggestSlot` = `{slot: "Ambulance", best: team_id|null, candidates: [{team: Team, eta_min, distance_km}] (top 3)}`
+- `Escalation` = `{level: "critical"|"warning", incident_id|null, message}`
+- `Similar` = `{id, title, severity, status, distance_m, minutes_apart}`
+- `Alert` = `{id, area, message, level: "info"|"warning"|"danger", hours, created_at, expires_at}`
+
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /api/teams | – | Team[] |
+| GET | /api/incidents/{id}/suggest | – | SuggestSlot[] (right team per slot, ranked by ETA) |
+| GET | /api/incidents/{id}/similar | – | Similar[] (possible duplicates: ≤500 m, ≤60 min, related category) |
+| POST | /api/incidents/{id}/assign | `{team_ids: string[]}` | Incident (status → In Progress; 409 if a team is busy) |
+| POST | /api/assignments/{id}/respond | `{accept: bool, reason}` | Incident (reject frees the team) |
+| POST | /api/assignments/{id}/status | `{status: "en_route"|"on_scene"|"completed", note}` | Incident (completed needs note ≥3 chars, frees team) |
+| GET | /api/responder/{team_id} | – | `[{assignment, incident}]` active jobs of that team |
+| GET | /api/escalations | – | Escalation[] (Critical unassigned >2 min, High >5 min, not accepted >1 min, resource shortage) |
+| POST | /api/alerts | `{area, message, level, hours}` (area = area name or "All Chennai") | Alert (201) |
+| GET | /api/alerts/active?area= | – | Alert[] |
+| POST | /api/simulate | `{scenario: "chennai_flood"}` | `{ok, created: string[]}` (8 new flood-day reports incl. duplicates + a vague one) |
+Marking a duplicate (`/duplicate`) now also adds a witness to the main incident: +3 points each, and 3+ reports raise it one level (R8).
+
+UI to add (in this order, stop if time runs out):
+1. Incident detail: **"Dispatch" card** — Suggest teams (slot → best team, ETA, distance, other candidates) → **Assign all suggested** / assign one; assignments list with status chips; **"Possible duplicates"** card from /similar with "Link as duplicate" button; witnesses badge.
+2. **`/responder`** (mobile-first, no sidebar, like /report): pick team (dropdown of /api/teams) → active job cards (incident title, severity, area, map pin, reasons, ETA) → Accept / Reject (reason chips: "No equipment", "Too far", "Already busy", "Other") → En route → On scene → Completed (note required). Refresh every 5 s.
+3. **Escalation banner** at top of AppShell (red for critical, amber warning) from /api/escalations, refresh 5 s, click → incident.
+4. **`/app/teams`**: team table (status chips) + map with team markers (square icons) and incident dots.
+5. **`/app/alerts`**: create alert form (area select incl. "All Chennai", message, level, hours) + active list. Citizen `/report` shows active alerts as a banner at top.
+6. Dashboard: **"Simulate flood"** button (calls /simulate, toast) next to Reset; teams-available tile or small card.
+Nav: Dashboard, Incidents, Teams, Alerts, New report · header links "Citizen view" (/report) and "Responder app" (/responder).

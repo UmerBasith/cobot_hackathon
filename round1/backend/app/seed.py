@@ -53,3 +53,29 @@ SEED: list[tuple[int, str, dict]] = [
         description="Ankle-deep water on the service road after rain. Drained by the corporation.",
         people_affected=0, injuries="none", hazard="small", active=False)),
 ]
+
+# Simulated burst: (minutes ago, report). Includes near-duplicates of seed incidents and one vague report.
+SIMULATE_FLOOD: list[tuple[int, dict]] = [
+    (3, dict(title="People on roof near Velachery lake", category="flood", area="Velachery", lat=12.9793, lng=80.2212,
+        landmark="2nd Main Road", description="Same building as earlier, water now at first floor, children crying on terrace.",
+        people_affected=5, life_threat=True, hazard="large", vulnerable=["children"])),
+    (2, dict(title="Rooftop family Velachery", category="flood", area="Velachery", lat=12.9788, lng=80.2219,
+        description="My neighbours are stuck on the terrace with a baby, please send a boat.",
+        people_affected=5, life_threat=True, hazard="large", vulnerable=["children"])),
+    (3, dict(title="House flooded, elderly couple stuck", category="flood", area="Tambaram", lat=12.9300, lng=80.1050,
+        landmark="Mudichur Road", description="Elderly couple cannot walk, water at chest level inside the house.",
+        people_affected=2, life_threat=True, hazard="large", vulnerable=["elderly"])),
+    (2, dict(title="Transformer sparking in water", category="electrical", area="Velachery", lat=12.9850, lng=80.2200,
+        landmark="Taramani Link Road", description="Transformer is sparking, water all around, people walking past.",
+        people_affected=20, hazard="medium")),
+    (2, dict(title="Car swept into canal", category="road_accident", area="Adyar", lat=13.0060, lng=80.2500,
+        landmark="Kotturpuram bridge", description="A car was pushed by the water into the canal, two people inside.",
+        people_affected=2, life_threat=True, injuries="serious", hazard="large")),
+    (1, dict(title="Pregnant woman needs hospital", category="medical", area="Sholinganallur", lat=12.9020, lng=80.2290,
+        description="Pregnant woman in labour, roads flooded, no vehicle can come.",
+        people_affected=1, injuries="serious", vulnerable=["pregnant"])),
+    (1, dict(title="Water entering slum houses", category="flood", area="Adyar", lat=12.9990, lng=80.2600,
+        landmark="Srinivasapuram", description="Water is entering about 80 houses near the river mouth, rising fast.",
+        people_affected=300, hazard="spreading", vulnerable=["children", "elderly"])),
+    (1, dict(title="help", category="other", area="Guindy", description="help pls", people_affected=1)),
+]

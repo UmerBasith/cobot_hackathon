@@ -1,35 +1,58 @@
-"""Tiny SQLite helper (no setup). Data file: backend/data/app.db"""
+"""SQLite store for incidents (one JSON document per row). Data file: backend/data/app.db"""
 from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "app.db"
+_lock = threading.Lock()
 
 
 def conn() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(exist_ok=True)
     c = sqlite3.connect(DB_PATH)
     c.row_factory = sqlite3.Row
-    c.execute(
-        "CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, data TEXT, created TEXT DEFAULT CURRENT_TIMESTAMP)"
-    )
+    c.execute("CREATE TABLE IF NOT EXISTS incidents (seq INTEGER PRIMARY KEY, id TEXT UNIQUE, data TEXT NOT NULL)")
     return c
 
 
-def add_item(kind: str, data: dict) -> int:
+def count() -> int:
     with conn() as c:
-        cur = c.execute("INSERT INTO items (kind, data) VALUES (?, ?)", (kind, json.dumps(data)))
-        return int(cur.lastrowid)
+        return int(c.execute("SELECT COUNT(*) FROM incidents").fetchone()[0])
 
 
-def list_items(kind: str, limit: int = 100) -> list[dict]:
+def all_incidents() -> list[dict]:
     with conn() as c:
-        rows = c.execute("SELECT * FROM items WHERE kind = ? ORDER BY id DESC LIMIT ?", (kind, limit)).fetchall()
-    return [{"id": r["id"], "created": r["created"], **json.loads(r["data"])} for r in rows]
+        return [json.loads(r["data"]) for r in c.execute("SELECT data FROM incidents ORDER BY seq")]
 
 
-def delete_item(item_id: int) -> None:
+def get(inc_id: str) -> dict | None:
     with conn() as c:
-        c.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        r = c.execute("SELECT data FROM incidents WHERE id = ?", (inc_id,)).fetchone()
+    return json.loads(r["data"]) if r else None
+
+
+def insert(make) -> dict:
+    """make(seq) -> incident dict. Allocates the next sequence number atomically."""
+    with _lock, conn() as c:
+        seq = int(c.execute("SELECT COALESCE(MAX(seq), 1000) + 1 FROM incidents").fetchone()[0])
+        inc = make(seq)
+        c.execute("INSERT INTO incidents (seq, id, data) VALUES (?, ?, ?)", (seq, inc["id"], json.dumps(inc)))
+    return inc
+
+
+def save(inc: dict) -> None:
+    with _lock, conn() as c:
+        c.execute("UPDATE incidents SET data = ? WHERE id = ?", (json.dumps(inc), inc["id"]))
+
+
+def delete(inc_id: str) -> bool:
+    with _lock, conn() as c:
+        return c.execute("DELETE FROM incidents WHERE id = ?", (inc_id,)).rowcount > 0
+
+
+def clear() -> None:
+    with _lock, conn() as c:
+        c.execute("DELETE FROM incidents")

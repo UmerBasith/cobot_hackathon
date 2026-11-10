@@ -1,0 +1,8 @@
+# Store text files with LF line endings for everyone (Windows + cloud). Binary files untouched.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.pptx binary
+*.docx binary
+*.pdf binary

@@ -203,7 +203,7 @@ function HeroHeader({ hero, available, onToggle, onSignOut }: { hero: HeroProfil
             {hero.verified && <BadgeCheck className="size-5 shrink-0 text-emerald-600" aria-label="Verified" />}
           </div>
           <p className="mt-0.5 flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
-            <ShieldCheck className="size-3.5" />Verified CPR responder · {hero.id}
+            <ShieldCheck className="size-3.5" />Verified CPR responder
           </p>
           <SkillChips skills={hero.skills} className="mt-2" />
         </div>

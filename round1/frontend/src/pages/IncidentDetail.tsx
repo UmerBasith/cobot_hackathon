@@ -8,6 +8,7 @@ import { CATEGORY_META, CategoryIcon, ReasonsList, SEV_HEX, SeverityBadge, Statu
 import { ScoreRing } from "@/sections/ReportFlow";
 import { LazyMap } from "@/sections/LazyMap";
 import { DeleteModal } from "./Incidents";
+import { DispatchCard, SimilarCard } from "@/sections/Dispatch";
 import { deleteIncident, getIncident, getIncidents, markDuplicate, timeAgo, updateStatus } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { fmtDate, fmtTime } from "@/lib/format";
@@ -79,6 +80,7 @@ export default function IncidentDetail() {
               <span className="text-xs text-muted">· {CATEGORY_META[inc.category]?.label}</span>
               {inc.flags.includes("needs_verification") && <Badge tone="amber">Needs verification</Badge>}
               {inc.duplicate_of && <Badge tone="gray">Duplicate of {inc.duplicate_of}</Badge>}
+              {(inc.witnesses ?? 0) > 0 && <Badge tone="blue"><Users className="size-3" />{inc.witnesses} more report{inc.witnesses > 1 ? "s" : ""} · +{inc.witnesses * 3}</Badge>}
             </div>
             <h2 className="mt-1 text-2xl font-semibold">{inc.title}</h2>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-muted"><Clock className="size-3.5" />Reported {timeAgo(inc.created_at)} · {fmtDate(inc.created_at)} {fmtTime(inc.created_at)}</p>
@@ -123,6 +125,7 @@ export default function IncidentDetail() {
         </div>
 
         <div className="min-w-0 space-y-4">
+          <DispatchCard inc={inc} onChange={reload} />
           <Card>
             <CardHeader title="Manage status" subtitle="Add a note, then move it forward" icon={Activity} />
             <CardBody className="space-y-4">
@@ -149,6 +152,7 @@ export default function IncidentDetail() {
               </div>
             </CardBody>
           </Card>
+          <SimilarCard inc={inc} onChange={reload} />
           <Card>
             <CardHeader title="Location" subtitle={`${inc.area}${inc.lat != null ? ` · ${inc.lat.toFixed(4)}, ${inc.lng?.toFixed(4)}` : ""}`} icon={MapPin} />
             <CardBody>

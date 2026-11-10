@@ -14,8 +14,12 @@ import { SEV_HEX } from "./IncidentUI";
 
 export interface MapPoint { id: string; lat: number; lng: number; severity: Severity; title: string; resolved?: boolean }
 
+export interface TeamPoint { id: string; lat: number; lng: number; label: string; status: "available" | "busy" | "offline" }
+const TEAM_HEX = { available: "#2563eb", busy: "#7c3aed", offline: "#94a3b8" };
+
 export interface IncidentMapProps {
   points?: MapPoint[];
+  teams?: TeamPoint[];
   onSelect?: (id: string) => void;
   /** Pick mode: tap the map to choose a location. */
   onPick?: (p: { lat: number; lng: number; area: string }) => void;
@@ -52,10 +56,18 @@ function dotEl(p: MapPoint) {
   return el;
 }
 
-function LiveMap({ points = [], onSelect, onPick, picked, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
+function teamEl(t: TeamPoint) {
+  const el = document.createElement("div");
+  el.title = `${t.label} · ${t.status}`;
+  el.style.cssText = `width:16px;height:16px;border-radius:4px;background:${TEAM_HEX[t.status]};border:2.5px solid white;box-shadow:0 2px 6px rgb(0 0 0/.35);transform:rotate(45deg)`;
+  return el;
+}
+
+function LiveMap({ teams = [], points = [], onSelect, onPick, picked, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
+  const teamMarkers = useRef<maplibregl.Marker[]>([]);
   const pickMarker = useRef<maplibregl.Marker | null>(null);
   const cb = useRef({ onSelect, onPick });
   cb.current = { onSelect, onPick };
@@ -92,6 +104,12 @@ function LiveMap({ points = [], onSelect, onPick, picked, onMode, visible }: Inc
 
   useEffect(() => {
     const m = map.current; if (!m) return;
+    teamMarkers.current.forEach((x) => x.remove());
+    teamMarkers.current = teams.map((t) => new maplibregl.Marker({ element: teamEl(t) }).setLngLat([t.lng, t.lat]).addTo(m));
+  }, [teams]);
+
+  useEffect(() => {
+    const m = map.current; if (!m) return;
     pickMarker.current?.remove();
     if (picked) pickMarker.current = new maplibregl.Marker({ color: "#dc2626" }).setLngLat([picked.lng, picked.lat]).addTo(m);
   }, [picked]);
@@ -104,7 +122,7 @@ function LiveMap({ points = [], onSelect, onPick, picked, onMode, visible }: Inc
 /* ----------------------------- SVG fallback map ----------------------------- */
 const W = 600, H = 680;
 
-function SvgMap({ points = [], onSelect, onPick, picked }: IncidentMapProps) {
+function SvgMap({ teams = [], points = [], onSelect, onPick, picked }: IncidentMapProps) {
   const [hover, setHover] = useState<string | null>(null);
   const coast = useMemo(() => COAST.map(([la, ln]) => project(la, ln, W, H)), []);
   const coastPath = coast.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
@@ -154,6 +172,22 @@ function SvgMap({ points = [], onSelect, onPick, picked }: IncidentMapProps) {
             <circle cx={p.x} cy={p.y} r="26" fill="var(--color-accent-500)" opacity="0.07" />
             <circle cx={p.x} cy={p.y} r="2.5" fill="var(--muted)" opacity="0.6" />
             <text x={p.x} y={p.y + 16} textAnchor="middle" style={{ font: "500 11px Inter Variable" }} fill="var(--muted)">{a.name}</text>
+          </g>
+        );
+      })}
+      {/* teams (diamonds) */}
+      {teams.map((t, k) => {
+        const q = project(t.lat, t.lng, W, H);
+        const off = (teams.slice(0, k).filter((o) => o.lat === t.lat && o.lng === t.lng).length) * 13;
+        return (
+          <g key={t.id} transform={`translate(${q.x - 14 + off},${q.y - 14})`} onMouseEnter={() => setHover(t.id)} onMouseLeave={() => setHover(null)}>
+            <rect x="-6" y="-6" width="12" height="12" rx="2.5" transform="rotate(45)" fill={TEAM_HEX[t.status]} stroke="white" strokeWidth="2" />
+            {hover === t.id && (
+              <g>
+                <rect x="10" y="-28" width={t.label.length * 6.2 + 20} height="22" rx="6" fill="var(--fg)" opacity="0.92" />
+                <text x="18" y="-13" style={{ font: "600 11px Inter Variable" }} fill="var(--bg)">{t.label}</text>
+              </g>
+            )}
           </g>
         );
       })}

@@ -83,8 +83,8 @@ export function BarChartBox({ data, x, series, height = 280, horizontal = false 
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout={horizontal ? "vertical" : "horizontal"} margin={{ top: 8, right: 8, left: horizontal ? 24 : -12, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={horizontal} horizontal={!horizontal} />
-        {horizontal ? <><XAxis type="number" {...axis} /><YAxis type="category" dataKey={x} {...axis} width={90} /></>
-                    : <><XAxis dataKey={x} {...axis} /><YAxis {...axis} /></>}
+        {horizontal ? <><XAxis type="number" allowDecimals={false} {...axis} /><YAxis type="category" dataKey={x} {...axis} width={90} /></>
+                    : <><XAxis dataKey={x} {...axis} /><YAxis allowDecimals={false} {...axis} /></>}
         <Tooltip {...tooltipStyle} />
         {series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => (

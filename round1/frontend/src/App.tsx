@@ -8,6 +8,9 @@ import Incidents from "@/pages/Incidents";
 import IncidentDetail from "@/pages/IncidentDetail";
 import ReportPage from "@/pages/Report";
 import Kit from "@/pages/Kit";
+import Responder from "@/pages/Responder";
+import Teams from "@/pages/Teams";
+import Alerts from "@/pages/Alerts";
 
 function AdminReport() {
   return (
@@ -27,11 +30,14 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/report" element={<ReportPage />} />
           <Route path="/kit" element={<Kit />} />
+          <Route path="/responder" element={<Responder />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Dashboard />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="incidents/:id" element={<IncidentDetail />} />
             <Route path="report" element={<AdminReport />} />
+            <Route path="teams" element={<Teams />} />
+            <Route path="alerts" element={<Alerts />} />
           </Route>
           <Route path="*" element={<Home />} />
         </Routes>

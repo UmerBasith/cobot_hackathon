@@ -1,14 +1,16 @@
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertOctagon, ArrowRight, CheckCircle2, Clock, Inbox, LayoutGrid, Map as MapIcon, PieChart, Plus, RefreshCw, Siren } from "lucide-react";
-import { Badge, BarChartBox, Button, Card, CardBody, CardHeader, ChartLegend, DonutChartBox, EmptyState, Skeleton, StatTile } from "@/ui";
+import { TeamIcon } from "@/sections/Dispatch";
+import { AlertOctagon, ArrowRight, CheckCircle2, Clock, Inbox, LayoutGrid, Map as MapIcon, PieChart, Plus, RefreshCw, Siren, CloudRain, RotateCcw, Truck } from "lucide-react";
+import { Badge, BarChartBox, Button, Card, CardBody, CardHeader, ChartLegend, DonutChartBox, EmptyState, Skeleton, StatTile, useToast } from "@/ui";
 import { PageIntro } from "@/sections/AppShell";
 import { CATEGORY_META, CategoryIcon, SEV_HEX, SeverityBadge, StatusBadge } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
-import { getIncidents, getStats, timeAgo } from "@/lib/resq";
+import { errText, getIncidents, getStats, getTeams, resetDemo, simulateFlood, timeAgo } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import type { Incident, Severity, Stats } from "@/lib/mock";
+import type { Incident, Severity, Stats, Team } from "@/lib/mock";
 
 const SEV_ORDER: Severity[] = ["Critical", "High", "Medium", "Low"];
 
@@ -16,7 +18,22 @@ export default function Dashboard() {
   const nav = useNavigate();
   const [stats, reloadStats, at] = usePoll<Stats>(getStats);
   const [list, reloadList] = usePoll<Incident[]>(() => getIncidents());
-  const reload = () => { reloadStats(); reloadList(); };
+  const [teams, reloadTeams] = usePoll<Team[]>(getTeams);
+  const reload = () => { reloadStats(); reloadList(); reloadTeams(); };
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  async function simulate() {
+    setBusy("sim");
+    try { const r = await simulateFlood(); toast("warning", `Flood simulation: ${r.created.length} new reports`, "Velachery · Tambaram · Adyar — watch the queue and escalations"); reload(); }
+    catch (e) { toast("error", "Could not simulate", errText(e)); }
+    finally { setBusy(null); }
+  }
+  async function reset() {
+    setBusy("reset");
+    try { const r = await resetDemo(); toast("success", "Demo data restored", `${r.incidents} incidents`); reload(); }
+    catch (e) { toast("error", "Could not reset", errText(e)); }
+    finally { setBusy(null); }
+  }
 
   const open = (list ?? []).filter((i) => i.status !== "Resolved");
   const attention = open.filter((i) => i.severity === "Critical" || i.severity === "High").slice(0, 6);
@@ -29,7 +46,9 @@ export default function Dashboard() {
     <>
       <PageIntro title="Control room" text={`Chennai · live incident picture${at ? ` · updated ${fmtTime(at)}` : ""}`}
         actions={<>
-          <Button variant="outline" icon={RefreshCw} onClick={reload}>Refresh</Button>
+          <Button variant="outline" icon={RotateCcw} loading={busy === "reset"} onClick={reset} title="Restore the 12 seed incidents">Reset</Button>
+          <Button variant="outline" icon={CloudRain} loading={busy === "sim"} onClick={simulate} className="border-sky-300 text-sky-700 dark:border-sky-800 dark:text-sky-300">Simulate flood</Button>
+          <Button variant="outline" icon={RefreshCw} onClick={reload} aria-label="Refresh" />
           <Link to="/app/report"><Button icon={Plus}>New report</Button></Link>
         </>} />
 
@@ -90,7 +109,27 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <Card className="mt-4">
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+      <Card className="min-w-0">
+        <CardHeader title="Response teams" subtitle="Live availability" icon={Truck}
+          action={<Link to="/app/teams" className="text-sm font-medium text-brand-600 hover:underline dark:text-brand-300">Open</Link>} />
+        <CardBody>
+          {!teams ? <Skeleton className="h-40" /> : (<>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-emerald-50 p-3 dark:bg-emerald-950/40"><p className="text-xs text-emerald-700 dark:text-emerald-300">Available</p><p className="font-display text-3xl font-semibold text-emerald-600 dark:text-emerald-400">{teams.filter((t) => t.status === "available").length}</p></div>
+              <div className="rounded-xl bg-brand-50 p-3 dark:bg-brand-900/30"><p className="text-xs text-brand-700 dark:text-brand-300">Busy</p><p className="font-display text-3xl font-semibold text-brand-600 dark:text-brand-400">{teams.filter((t) => t.status === "busy").length}</p></div>
+            </div>
+            <div className="mt-3 space-y-1.5">
+              {teams.filter((t) => t.status === "busy").slice(0, 4).map((t) => (
+                <Link key={t.id} to={t.current_incident ? `/app/incidents/${t.current_incident}` : "/app/teams"} className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-sm hover:bg-surface-2">
+                  <TeamIcon type={t.type} className="size-7" /><span className="min-w-0 flex-1 truncate">{t.name}</span><span className="font-mono text-xs text-muted">{t.current_incident ?? ""}</span>
+                </Link>
+              ))}
+            </div>
+          </>)}
+        </CardBody>
+      </Card>
+      <Card className="min-w-0 xl:col-span-2">
         <CardHeader title="Latest reports" subtitle="Most recent first" icon={Inbox} />
         <CardBody className="space-y-1">
           {[...(list ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5).map((i) => (
@@ -104,6 +143,7 @@ export default function Dashboard() {
           ))}
         </CardBody>
       </Card>
+      </div>
     </>
   );
 }

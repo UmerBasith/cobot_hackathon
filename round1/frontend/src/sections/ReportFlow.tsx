@@ -6,11 +6,12 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Copy, Gauge, HeartPulse, ImagePlus, LayoutDashboard, MapPin, Minus,
-  Keyboard, Mic, Pencil, Phone, Plus, Radar, Send, Sparkles, Square, UserX, WifiOff, X,
+  Keyboard, LocateFixed, Mic, Pencil, Phone, Plus, Radar, Send, Sparkles, Square, UserX, WifiOff, X,
 } from "lucide-react";
 import { useToast } from "@/ui";
 import { cn } from "@/lib/cn";
-import { AREAS, areaByName } from "@/lib/geo";
+import { AREAS, areaByName, nearestArea } from "@/lib/geo";
+import { useLiveLocation } from "@/lib/useLiveLocation";
 import {
   mockCreate, type Category, type Hazard, type Incident, type Injuries, type ReportIn, type Severity, type SeverityOut, type Vulnerable,
 } from "@/lib/mock";
@@ -123,6 +124,15 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
   const [done, setDone] = useState<{ inc: Incident; local: boolean } | null>(null);
   const [showErr, setShowErr] = useState(false);
   const [editLL, setEditLL] = useState(false);
+  // Live GPS location: starts automatically, follows the phone until the user taps the map or picks an area
+  const live = useLiveLocation();
+  const [followLive, setFollowLive] = useState(true);
+  useEffect(() => { if (!STATIC) live.start(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!followLive || !live.pos) return;
+    const near = nearestArea(live.pos.lat, live.pos.lng);
+    setF((x) => ({ ...x, lat: +live.pos!.lat.toFixed(5), lng: +live.pos!.lng.toFixed(5), area: near.name }));
+  }, [live.pos, followLive]);
   const [voice, setVoice] = useState<{ conf: number; text: string; how: "voice" | "typed" } | null>(null);
   const top = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -181,6 +191,7 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
       ...(a ? { area: a.name, lat: a.lat, lng: a.lng } : {}),
       reported_severity: x.life_threat ? "Critical" : cur.reported_severity,
     }));
+    if (a) setFollowLive(false); // a spoken area wins; otherwise keep the live GPS location
     setPicked(true); setExtras(true); setTitleTouched(false); setShowErr(false);
     setVoice({ conf: p.confidence, text, how });
     toast("success", how === "voice" ? "Filled from your voice" : "Filled from your text",
@@ -322,7 +333,7 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Label icon={<MapPin className="size-4 text-[#e53935]" />} className="mb-0">Location <Req /></Label>
         <select value={f.area} aria-label="Area"
-          onChange={(e) => { const a = areaByName(e.target.value); setF((x) => ({ ...x, area: e.target.value, lat: a?.lat ?? x.lat, lng: a?.lng ?? x.lng })); }}
+          onChange={(e) => { setFollowLive(false); const a = areaByName(e.target.value); setF((x) => ({ ...x, area: e.target.value, lat: a?.lat ?? x.lat, lng: a?.lng ?? x.lng })); }}
           className={cn("h-9 max-w-[60%] rounded-lg border bg-white px-2.5 text-sm font-medium text-[#1e63d6] outline-none focus:ring-4 focus:ring-blue-100",
             err("area") ? "border-red-400" : "border-slate-200")}>
           <option value="">Chennai, Tamil Nadu — select area</option>
@@ -331,7 +342,22 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
       </div>
       <div className="overflow-hidden rounded-xl border border-slate-200">
         <LazyMap height={isMobile ? 260 : 230} picked={f.lat != null && f.lng != null ? { lat: f.lat, lng: f.lng } : null}
-          onPick={(p) => setF((x) => ({ ...x, lat: p.lat, lng: p.lng, area: p.area }))} />
+          me={live.pos} followMe={followLive}
+          onPick={(p) => { setFollowLive(false); setF((x) => ({ ...x, lat: p.lat, lng: p.lng, area: p.area })); }} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => { setFollowLive(true); live.start(); }}
+          className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition",
+            followLive && live.status === "live" ? "bg-emerald-600 text-white" : "bg-[#1e63d6] text-white hover:bg-[#1853b8]")}>
+          <LocateFixed className="size-4" />{followLive && live.status === "live" ? "Using your live location" : "Use my live location"}
+        </button>
+        <span className="text-xs text-slate-500">
+          {live.status === "live" && live.pos ? `GPS ±${live.pos.accuracy} m${followLive ? " · following you" : " · tap the button to follow again"}`
+            : live.status === "asking" ? "Getting your location…"
+            : live.status === "denied" ? "Location permission denied — tap the map or pick your area"
+            : live.status === "insecure" ? "GPS needs https or localhost — tap the map or pick your area"
+            : live.status === "unavailable" ? "GPS unavailable — tap the map or pick your area" : "Allow location to pin your exact spot"}
+        </span>
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         <span className="inline-flex items-center gap-1 font-mono text-slate-600"><MapPin className="size-3.5 text-[#e53935]" />

@@ -6,25 +6,25 @@ import re
 from .geo import AREAS
 
 CATEGORY_WORDS: dict[str, list[str]] = {
-    "fire": ["fire", "smoke", "burning", "flames", "thee", "theee", "தீ", "புகை", "எரி"],
+    "fire": ["fire", "smoke", "burning", "flames", "thee", "theee", "neruppu", "தீ", "புகை", "எரி", "நெருப்பு", "தீப்பிடி", "பிடிச்சிருச்சு", "பத்திக்கிச்சு", "எரியுது"],
     "flood": ["flood", "water", "waterlog", "drown", "rain", "vellam", "veLLam", "வெள்ளம்", "தண்ணீர்", "நீர்"],
-    "road_accident": ["accident", "crash", "collision", "bus", "lorry", "bike", "car", "vibathu", "விபத்து"],
-    "medical": ["heart", "chest pain", "collapsed", "unconscious", "fainted", "breath", "cardiac", "stroke", "pregnant",
+    "road_accident": ["accident", "crash", "collision", "bus", "lorry", "bike", "car", "vibathu", "விபத்து", "ஆக்சிடென்ட்", "பைக்", "லாரி"],
+    "medical": ["மாரடைப்பு வந்து", "heart", "chest pain", "collapsed", "unconscious", "fainted", "breath", "cardiac", "stroke", "pregnant",
                 "labour", "medical", "ambulance", "maradaippu", "mayakkam", "மாரடைப்பு", "மயக்கம்", "மருத்துவ",
                 "நெஞ்சு வலி"],
-    "building_collapse": ["collapse", "collapsed building", "wall fell", "building fell", "idinju", "idinthu",
+    "building_collapse": ["இடிஞ்சு விழுந்து", "collapse", "collapsed building", "wall fell", "building fell", "idinju", "idinthu",
                           "இடிந்து", "இடிஞ்சு", "கட்டிடம்"],
     "gas_leak": ["gas", "cylinder", "leak", "smell", "எரிவாயு", "சிலிண்டர்", "கேஸ்"],
-    "electrical": ["electric", "current", "wire", "shock", "transformer", "power", "spark", "மின்சாரம்", "கரண்ட்", "மின்"],
+    "electrical": ["electric", "current", "wire", "shock", "transformer", "power", "spark", "மின்சாரம்", "கரண்ட்", "மின்", "ஷாக்"],
     "landslide": ["landslide", "mudslide", "mud", "மண்சரிவு"],
 }
 # words that are strong for one category even when another keyword also matches
 PRIORITY = ["building_collapse", "fire", "gas_leak", "electrical", "landslide", "road_accident", "flood", "medical"]
 
-LIFE_WORDS = ["trapped", "stuck", "not breathing", "no breath", "unconscious", "no pulse", "drowning", "under debris",
+LIFE_WORDS = ["மயங்கி", "மூச்சு விடல", "மாட்டிக்கிட்டு", "trapped", "stuck", "not breathing", "no breath", "unconscious", "no pulse", "drowning", "under debris",
               "maattikittanga", "maatikittanga", "sikki", "mayakkam", "மூச்சு இல்லை", "சிக்கி", "மாட்டிக்", "மயக்கம்"]
 SERIOUS_WORDS = ["bleeding", "serious", "badly", "chest pain", "fracture", "burns", "ratham", "இரத்தம்", "ரத்தம்"]
-INJURY_WORDS = ["injured", "hurt", "wound", "cut", "kaayam", "காயம்"]
+INJURY_WORDS = ["injured", "hurt", "wound", "cut", "kaayam", "adipattu", "காயம்", "அடிபட்டு", "அடிபட்ட", "அடி பட்டு"]
 CHILD_WORDS = ["child", "children", "baby", "kid", "kuzhandhai", "குழந்தை"]
 ELDER_WORDS = ["elderly", "old man", "old woman", "grandmother", "grandfather", "paati", "thatha", "முதியவர்", "பாட்டி", "தாத்தா"]
 SPREAD_WORDS = ["spreading", "rising", "growing", "fast", "பரவுது", "ஏறுது", "அதிகமா"]

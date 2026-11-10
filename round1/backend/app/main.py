@@ -157,7 +157,7 @@ def get_or_404(inc_id: str) -> dict:
 
 @app.get("/api/health")
 def health() -> dict:
-    return {"status": "ok", "incidents": db.count(), "time": now_iso()}
+    return {"status": "ok", "incidents": db.count(), "database": db.info(), "time": now_iso()}
 
 
 @app.post("/api/severity/preview", response_model=SeverityOut)
@@ -770,9 +770,7 @@ def hero_live(body: dict) -> dict:
 
 @app.delete("/api/hero/live/{hero_id}")
 def hero_offline(hero_id: str) -> dict:
-    with db._lock, db.conn() as c:  # noqa: SLF001
-        db._docs(c)  # noqa: SLF001
-        c.execute("DELETE FROM docs WHERE kind = 'hero' AND id = ?", (hero_id.upper(),))
+    db.delete_doc("hero", hero_id.upper())
     return {"offline": hero_id.upper()}
 
 
@@ -875,9 +873,7 @@ def delete_team(team_id: str) -> dict:
         raise HTTPException(404, f"Team {team_id} not found")
     if t["status"] == "busy":
         raise HTTPException(409, f"{t['name']} is busy on {t['current_incident']}")
-    with db._lock, db.conn() as c:  # noqa: SLF001
-        db._docs(c)  # noqa: SLF001
-        c.execute("DELETE FROM docs WHERE kind = 'team' AND id = ?", (t["id"],))
+    db.delete_doc("team", t["id"])
     return {"deleted": t["id"]}
 
 

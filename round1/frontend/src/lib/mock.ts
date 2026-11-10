@@ -258,3 +258,77 @@ export const mockAlerts: Alert[] = [{
   message: "Heavy flooding near Velachery lake. Move to upper floors, avoid 100 Feet Road.",
   created_at: new Date(now - 20 * 60000).toISOString(), expires_at: new Date(now + 5.6 * 3600000).toISOString(),
 }];
+
+/* ------------------------- Final page list (§11) -------------------------- */
+export interface TrackOut {
+  id: string; title: string; category: Category; area: string; landmark: string; severity: Severity; score: number;
+  reasons: Reason[]; status: Status; duplicate_of: string | null; created_at: string; updated_at: string;
+  timeline: TimelineEntry[]; teams: { team_name: string; team_type: TeamType; status: AssignmentStatus; eta_min: number }[];
+}
+export type ZoneStatus = "critical" | "evacuate" | "watch" | "safe";
+export interface Zone { id: string; area: string; lat: number; lng: number; status: ZoneStatus; note: string; open_incidents: number; critical_incidents: number; updated_at: string }
+export interface Shelter { id: string; name: string; area: string; lat: number; lng: number; capacity: number; occupancy: number; facilities: string[] }
+export interface Analytics {
+  total: number; open: number; resolved: number; resolution_rate: number;
+  avg_time_to_assign_min: number | null; avg_time_to_resolve_min: number | null; critical_avg_time_to_assign_min: number | null;
+  teams_total: number; teams_busy: number; utilisation: number; rejections: number;
+  by_hour: { hour: string; reported: number; resolved: number }[];
+  by_area: { area: string; total: number; critical: number; open: number }[];
+  by_category: { category: Category; label: string; total: number; avg_score: number }[];
+  by_severity: { severity: Severity; total: number; open: number }[];
+  by_status: { status: Status; count: number }[];
+  team_performance: { team_id: string; team_name: string; type_label: string; jobs: number; completed: number; rejected: number; avg_eta_min: number | null }[];
+}
+
+export function mockTrack(id: string): TrackOut | null {
+  const i = mockIncidents.find((x) => x.id === id);
+  if (!i) return null;
+  return {
+    id: i.id, title: i.title, category: i.category, area: i.area, landmark: i.landmark, severity: i.severity, score: i.score,
+    reasons: i.reasons, status: i.status, duplicate_of: i.duplicate_of, created_at: i.created_at, updated_at: i.updated_at, timeline: i.timeline,
+    teams: i.status === "In Progress" ? [{ team_name: "ALS Ambulance · Velachery", team_type: "ambulance_als", status: "en_route", eta_min: 6 }] : [],
+  };
+}
+
+const zoneOf = (area: string, status: ZoneStatus, note: string): Zone => {
+  const a = areaByName(area)!; const inc = mockIncidents.filter((i) => i.area === area && i.status !== "Resolved");
+  return { id: area, area, lat: a.lat, lng: a.lng, status, note, open_incidents: inc.length, critical_incidents: inc.filter((i) => i.severity === "Critical").length, updated_at: new Date(now).toISOString() };
+};
+export const mockZones: Zone[] = [
+  zoneOf("Velachery", "critical", "Lake overflow, 1st floors flooded"),
+  zoneOf("Tambaram", "evacuate", "Low-lying streets near Mudichur flooding"),
+  zoneOf("Adyar", "evacuate", "River level rising near Srinivasapuram"),
+  zoneOf("Chromepet", "watch", "GST Road accidents, wet roads"),
+  zoneOf("Guindy", "watch", "Waterlogging under the flyover"),
+  zoneOf("T. Nagar", "safe", "Normal"), zoneOf("Anna Nagar", "safe", "Normal"),
+];
+const sh = (id: string, name: string, area: string, capacity: number, occupancy: number, facilities: string[]): Shelter => {
+  const a = areaByName(area)!; return { id, name, area, lat: a.lat - 0.004, lng: a.lng + 0.005, capacity, occupancy, facilities };
+};
+export const mockShelters: Shelter[] = [
+  sh("SH-1", "Velachery Govt Higher Sec. School", "Velachery", 400, 362, ["food", "water", "medical"]),
+  sh("SH-2", "Guindy Community Hall", "Guindy", 250, 120, ["food", "water"]),
+  sh("SH-3", "Tambaram Corporation Marriage Hall", "Tambaram", 300, 288, ["food", "water", "medical"]),
+  sh("SH-4", "Adyar Kalakshetra Hall", "Adyar", 200, 74, ["food", "water", "power backup"]),
+  sh("SH-5", "Crescent Institute Auditorium", "Vandalur", 500, 96, ["food", "water", "medical", "power backup"]),
+];
+
+export function mockAnalytics(): Analytics {
+  const st = computeStats(mockIncidents);
+  const hours = Array.from({ length: 6 }, (_, k) => {
+    const h = new Date(now - (5 - k) * 3600000); h.setMinutes(0, 0, 0);
+    return { hour: h.toISOString(), reported: [1, 0, 2, 1, 3, 5][k], resolved: [0, 0, 1, 0, 1, 0][k] };
+  });
+  return {
+    total: st.total, open: st.total - st.resolved, resolved: st.resolved, resolution_rate: +((st.resolved / st.total) * 100).toFixed(1),
+    avg_time_to_assign_min: 4.2, avg_time_to_resolve_min: 96, critical_avg_time_to_assign_min: 2.6,
+    teams_total: mockTeams.length, teams_busy: mockTeams.filter((t) => t.status === "busy").length,
+    utilisation: +((mockTeams.filter((t) => t.status === "busy").length / mockTeams.length) * 100).toFixed(1), rejections: 1,
+    by_hour: hours,
+    by_area: st.by_area.map((a) => ({ area: a.area, total: a.count, critical: mockIncidents.filter((i) => i.area === a.area && i.severity === "Critical").length, open: mockIncidents.filter((i) => i.area === a.area && i.status !== "Resolved").length })),
+    by_category: st.by_category.map((c) => { const l = mockIncidents.filter((i) => i.category === c.category); return { category: c.category, label: c.label, total: c.count, avg_score: l.length ? Math.round(l.reduce((s, i) => s + i.score, 0) / l.length) : 0 }; }),
+    by_severity: SEVERITIES.map((sv) => ({ severity: sv, total: mockIncidents.filter((i) => i.severity === sv).length, open: mockIncidents.filter((i) => i.severity === sv && i.status !== "Resolved").length })),
+    by_status: STATUSES.map((s2) => ({ status: s2, count: mockIncidents.filter((i) => i.status === s2).length })),
+    team_performance: mockTeams.slice(0, 6).map((t, k) => ({ team_id: t.id, team_name: t.name, type_label: t.type_label, jobs: [3, 2, 2, 1, 1, 0][k], completed: [2, 2, 1, 1, 0, 0][k], rejected: k === 3 ? 1 : 0, avg_eta_min: k < 5 ? [8.4, 12.1, 6.3, 15.0, 9.8][k] : null })),
+  };
+}

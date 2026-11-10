@@ -1,7 +1,8 @@
 /** ResQNet API calls. Reads always go through withFallback; mutations throw so the UI can show an error toast. */
 import { api, withFallback } from "./api";
 import {
-  mockAlerts, mockEscalations, mockSuggest, mockTeams,
+  mockAlerts, mockEscalations, mockSuggest, mockTeams, mockTrack, mockZones, mockShelters, mockAnalytics,
+  type TrackOut, type Zone, type ZoneStatus, type Shelter, type Analytics,
   type Alert, type AlertLevel, type Escalation, type ResponderJob, type Similar, type SuggestSlot, type Team,
   computeStats, localSeverity, mockIncidents, sortIncidents,
   type Incident, type ReportIn, type SeverityOut, type Stats, type Status,
@@ -33,6 +34,21 @@ export const assignmentStatus = (id: string, status: "en_route" | "on_scene" | "
 export const createAlert = (a: { area: string; message: string; level: AlertLevel; hours: number }) => api.post<Alert>("/alerts", a);
 export const simulateFlood = () => api.post<{ ok: boolean; created: string[] }>("/simulate", { scenario: "chennai_flood" });
 export const resetDemo = () => api.post<{ ok: boolean; incidents: number }>("/reset");
+
+/* §11 */
+export const getTrack = (id: string): Promise<TrackOut | null> =>
+  api.get<TrackOut>(`/track/${enc(id)}`).catch((e) => (String(e).includes("404") ? null : mockTrack(id)));
+export const getZones = () => withFallback(api.get<Zone[]>("/zones"), mockZones);
+export const getShelters = () => withFallback(api.get<Shelter[]>("/shelters"), mockShelters);
+export const getAnalytics = () => withFallback(api.get<Analytics>("/analytics"), mockAnalytics());
+export const updateZone = (area: string, status: ZoneStatus, note: string) => patch<Zone>(`/zones/${enc(area)}`, { status, note });
+export const updateShelter = (id: string, occupancy: number) => patch<Shelter>(`/shelters/${enc(id)}`, { occupancy });
+
+async function patch<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${await res.text().catch(() => "")}`.slice(0, 300));
+  return res.json();
+}
 
 /** Readable error text from api.ts errors ("409 Conflict: {"detail":"..."}"). */
 export function errText(e: unknown) {

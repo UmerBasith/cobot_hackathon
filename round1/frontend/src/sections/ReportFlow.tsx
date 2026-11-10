@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
-  ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, Copy, Gauge, LayoutDashboard, MapPin, Plus, ShieldAlert, WifiOff,
+  ArrowLeft, ArrowRight, CheckCircle2, ClipboardList, Copy, Gauge, LayoutDashboard, MapPin, Plus, Radar, ShieldAlert, WifiOff,
 } from "lucide-react";
 import { Button, Card, Field, Input, Select, Textarea, useToast } from "@/ui";
 import { cn } from "@/lib/cn";
@@ -336,9 +336,10 @@ function Result({ inc, local, admin, onNew }: { inc: Incident; local: boolean; a
             <ReasonsList reasons={inc.reasons} compact />
           </div>
           <div className="flex flex-wrap gap-2 pt-1">
+            {!local && <Link to={`/track/${inc.id}`}><Button icon={Radar} variant={admin ? "outline" : "primary"}>Track this report</Button></Link>}
             <Button icon={Plus} variant="outline" onClick={onNew}>New report</Button>
             {admin || !local ? (
-              <Link to={local ? "/app" : `/app/incidents/${inc.id}`}><Button icon={LayoutDashboard}>{admin ? "Open incident" : "Track in control room"}</Button></Link>
+              <Link to={local ? "/app" : `/app/incidents/${inc.id}`}><Button icon={LayoutDashboard} variant={admin ? "primary" : "outline"}>{admin ? "Open incident" : "Control room"}</Button></Link>
             ) : null}
           </div>
         </div>

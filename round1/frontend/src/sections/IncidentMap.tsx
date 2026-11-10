@@ -14,12 +14,21 @@ import { SEV_HEX } from "./IncidentUI";
 
 export interface MapPoint { id: string; lat: number; lng: number; severity: Severity; title: string; resolved?: boolean }
 
+export type ZoneStatus = "critical" | "evacuate" | "watch" | "safe";
+export const ZONE_HEX: Record<ZoneStatus, string> = { critical: "#dc2626", evacuate: "#ea580c", watch: "#d97706", safe: "#16a34a" };
+export interface ZonePoint { id: string; lat: number; lng: number; status: ZoneStatus; label: string }
+export interface ShelterPoint { id: string; lat: number; lng: number; label: string; pct: number }
+const shelterHex = (pct: number) => (pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#0284c7");
+const HOUSE = "M3 10.5L12 3l9 7.5V21h-6v-6H9v6H3z";
+
 export interface TeamPoint { id: string; lat: number; lng: number; label: string; status: "available" | "busy" | "offline" }
 const TEAM_HEX = { available: "#2563eb", busy: "#7c3aed", offline: "#94a3b8" };
 
 export interface IncidentMapProps {
   points?: MapPoint[];
   teams?: TeamPoint[];
+  zones?: ZonePoint[];
+  shelters?: ShelterPoint[];
   onSelect?: (id: string) => void;
   /** Pick mode: tap the map to choose a location. */
   onPick?: (p: { lat: number; lng: number; area: string }) => void;
@@ -77,11 +86,27 @@ function teamEl(t: TeamPoint) {
   return el;
 }
 
-function LiveMap({ teams = [], points = [], onSelect, onPick, picked, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
+function zoneEl(z: ZonePoint) {
+  const el = document.createElement("div");
+  el.title = `${z.label} · ${z.status}`;
+  const c = ZONE_HEX[z.status];
+  el.style.cssText = `width:64px;height:64px;border-radius:999px;background:${c}2e;border:2px solid ${c};pointer-events:none`;
+  return el;
+}
+function shelterEl(sh: ShelterPoint) {
+  const el = document.createElement("div");
+  el.title = `${sh.label} · ${sh.pct}% full`;
+  el.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="white"><path d="${HOUSE}"/></svg>`;
+  el.style.cssText = `display:grid;place-items:center;width:22px;height:22px;border-radius:6px;background:${shelterHex(sh.pct)};border:2px solid white;box-shadow:0 2px 6px rgb(0 0 0/.35)`;
+  return el;
+}
+
+function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
   const teamMarkers = useRef<maplibregl.Marker[]>([]);
+  const zoneMarkers = useRef<maplibregl.Marker[]>([]);
   const pickMarker = useRef<maplibregl.Marker | null>(null);
   const cb = useRef({ onSelect, onPick });
   cb.current = { onSelect, onPick };
@@ -130,6 +155,15 @@ function LiveMap({ teams = [], points = [], onSelect, onPick, picked, onMode, vi
 
   useEffect(() => {
     const m = map.current; if (!m) return;
+    zoneMarkers.current.forEach((x) => x.remove());
+    zoneMarkers.current = [
+      ...zones.map((z) => new maplibregl.Marker({ element: zoneEl(z) }).setLngLat([z.lng, z.lat]).addTo(m)),
+      ...shelters.map((sh) => new maplibregl.Marker({ element: shelterEl(sh) }).setLngLat([sh.lng, sh.lat]).addTo(m)),
+    ];
+  }, [zones, shelters]);
+
+  useEffect(() => {
+    const m = map.current; if (!m) return;
     pickMarker.current?.remove();
     if (picked) pickMarker.current = new maplibregl.Marker({ color: "#dc2626" }).setLngLat([picked.lng, picked.lat]).addTo(m);
   }, [picked]);
@@ -142,7 +176,7 @@ function LiveMap({ teams = [], points = [], onSelect, onPick, picked, onMode, vi
 /* ----------------------------- SVG fallback map ----------------------------- */
 const W = 600, H = 680;
 
-function SvgMap({ teams = [], points = [], onSelect, onPick, picked }: IncidentMapProps) {
+function SvgMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked }: IncidentMapProps) {
   const [hover, setHover] = useState<string | null>(null);
   const coast = useMemo(() => COAST.map(([la, ln]) => project(la, ln, W, H)), []);
   const coastPath = coast.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
@@ -192,6 +226,32 @@ function SvgMap({ teams = [], points = [], onSelect, onPick, picked }: IncidentM
             <circle cx={p.x} cy={p.y} r="26" fill="var(--color-accent-500)" opacity="0.07" />
             <circle cx={p.x} cy={p.y} r="2.5" fill="var(--muted)" opacity="0.6" />
             <text x={p.x} y={p.y + 16} textAnchor="middle" style={{ font: "500 11px Inter Variable" }} fill="var(--muted)">{a.name}</text>
+          </g>
+        );
+      })}
+      {/* zones */}
+      {zones.map((z) => {
+        const q = project(z.lat, z.lng, W, H); const c = ZONE_HEX[z.status];
+        return (
+          <g key={z.id}>
+            {z.status === "critical" && !STATIC && <circle cx={q.x} cy={q.y} r="34" fill={c} opacity="0.15" className="sos-ring" />}
+            <circle cx={q.x} cy={q.y} r="34" fill={c} fillOpacity="0.16" stroke={c} strokeWidth="1.8" strokeDasharray={z.status === "safe" ? "4 3" : undefined} />
+          </g>
+        );
+      })}
+      {/* shelters */}
+      {shelters.map((sh) => {
+        const q = project(sh.lat, sh.lng, W, H);
+        return (
+          <g key={sh.id} transform={`translate(${q.x + 10},${q.y - 22})`} onMouseEnter={() => setHover(sh.id)} onMouseLeave={() => setHover(null)}>
+            <rect x="-10" y="-10" width="20" height="20" rx="5" fill={shelterHex(sh.pct)} stroke="white" strokeWidth="2" />
+            <path d={HOUSE} transform="translate(-6,-6) scale(0.5)" fill="white" />
+            {hover === sh.id && (
+              <g>
+                <rect x="14" y="-12" width={sh.label.length * 6.2 + 60} height="22" rx="6" fill="var(--fg)" opacity="0.92" />
+                <text x="22" y="3" style={{ font: "600 11px Inter Variable" }} fill="var(--bg)">{sh.label} · {sh.pct}%</text>
+              </g>
+            )}
           </g>
         );
       })}

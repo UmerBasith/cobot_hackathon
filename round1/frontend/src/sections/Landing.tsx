@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "motion/react";
-import { ArrowRight, Clock, EyeOff, LayoutDashboard, Menu, MessageSquareWarning, Siren, Sparkles, Users, X } from "lucide-react";
+import { ArrowRight, Radar, Clock, EyeOff, LayoutDashboard, Menu, MessageSquareWarning, Siren, Sparkles, Users, X } from "lucide-react";
 import { features, nav, product, stats, steps, team } from "@/config";
 import { Badge, Button, Card, CountUp, Reveal, SectionHeading, Slider, Stagger, StaggerItem, Switch, Tabs, WordsReveal } from "@/ui";
 import { cn } from "@/lib/cn";
@@ -34,6 +34,7 @@ export function Navbar() {
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          <Link to="/track" className="hidden sm:block"><Button size="sm" variant="ghost" icon={Radar}>Track report</Button></Link>
           <Link to="/app" className="hidden lg:block"><Button size="sm" variant="outline" icon={LayoutDashboard}>Control room</Button></Link>
           <Call112 compact />
           <button className="grid size-9 place-items-center rounded-xl border border-line md:hidden" onClick={() => setOpen(!open)} aria-label="Menu">
@@ -46,6 +47,7 @@ export function Navbar() {
           {nav.map((n) => <a key={n.href} href={n.href} onClick={() => setOpen(false)} className="block py-2 text-sm">{n.label}</a>)}
           <Link to="/report"><Button className="mt-2 w-full">{product.primaryCta}</Button></Link>
           <Link to="/app"><Button variant="outline" className="mt-2 w-full">{product.secondaryCta}</Button></Link>
+          <Link to="/track"><Button variant="ghost" className="mt-2 w-full" icon={Radar}>Track report</Button></Link>
         </div>
       )}
     </header>

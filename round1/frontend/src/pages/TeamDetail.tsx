@@ -85,7 +85,7 @@ export default function TeamDetail() {
   ];
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
       <Card className="min-w-0 self-start">
         <CardHeader title={`All Teams (${teams.length})`} icon={Users} />
         <CardBody className="space-y-2">
@@ -129,7 +129,7 @@ export default function TeamDetail() {
 
         <Card className="min-w-0">
           <CardHeader title="Team profile" subtitle="Live from the server" icon={ShieldCheck} />
-          <CardBody className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+          <CardBody className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.2fr]">
             <dl className="grid grid-cols-2 gap-3 text-sm">
               {[
                 ["Team name / ID", <><span className="block font-medium">{team.name}</span><span className="font-mono text-xs text-muted">{team.id}</span></>],
@@ -167,7 +167,7 @@ export default function TeamDetail() {
         </div>
         <p className="-mt-2 text-right text-[11px] text-muted">Personnel, vehicles, equipment and certifications: demo data</p>
 
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {(tab === "overview" || tab === "mgmt" || tab === "shift") && (
             <Card><CardHeader title="Personnel" subtitle="demo data" icon={Users} /><CardBody className="space-y-2.5">
               {d.people.map((p) => (

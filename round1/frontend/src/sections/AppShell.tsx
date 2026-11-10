@@ -18,6 +18,7 @@ export const appNav: NavItem[] = [
   { to: "/admin", label: "Command Centre", icon: LayoutDashboard },
   { to: "/admin/incidents", label: "Incidents", icon: ListOrdered, badge: "open" },
   { to: "/admin/golden-hour", label: "Golden Hour", icon: HeartPulse },
+  { to: "/admin/risk", label: "Risk Radar", icon: CloudRain },
   { to: "/admin/teams", label: "Response Teams", icon: Users, badge: "teams" },
   { to: "/admin/alerts", label: "Alerts", icon: BellRing },
   { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },

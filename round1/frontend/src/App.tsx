@@ -21,6 +21,8 @@ import Analytics from "@/pages/Analytics";
 import Zones from "@/pages/Zones";
 import GoldenHour from "@/pages/GoldenHour";
 import Hero from "@/pages/Hero";
+import RiskRadar from "@/pages/RiskRadar";
+import Sms from "@/pages/Sms";
 
 function AdminReport() {
   return (
@@ -57,6 +59,7 @@ export default function App() {
           <Route path="/track" element={<Track />} />
           <Route path="/track/:id" element={<Track />} />
           <Route path="/hero" element={<Hero />} />
+          <Route path="/sms" element={<Sms />} />
           <Route path="/responder/login" element={<Login role="responder" />} />
           <Route path="/responder" element={<RequireRole role="responder"><Responder /></RequireRole>} />
           <Route path="/admin/login" element={<Login role="admin" />} />
@@ -72,6 +75,7 @@ export default function App() {
             <Route path="analytics" element={<Analytics />} />
             <Route path="zones" element={<Zones />} />
             <Route path="golden-hour" element={<GoldenHour />} />
+            <Route path="risk" element={<RiskRadar />} />
           </Route>
           <Route path="*" element={<Home />} />
         </Routes>

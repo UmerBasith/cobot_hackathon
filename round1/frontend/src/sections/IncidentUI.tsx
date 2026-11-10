@@ -1,6 +1,6 @@
 /** Shared ResQNet bits: category meta, severity/status badges, reasons list, Call 112 button. */
 import {
-  AlertTriangle, Building2, CarFront, Flame, HeartPulse, Phone, Waves, Wind, Zap, type LucideIcon,
+  AlertTriangle, Building2, CarFront, Flame, HeartPulse, Mountain, Phone, Waves, Wind, Zap, type LucideIcon,
 } from "lucide-react";
 import { motion } from "motion/react";
 import { cn } from "@/lib/cn";
@@ -15,11 +15,13 @@ export const CATEGORY_META: Record<Category, { icon: LucideIcon; label: string; 
   flood: { icon: Waves, label: CATEGORY_LABEL.flood, short: "Flood", tile: "from-sky-500 to-blue-700", soft: "bg-sky-50 text-sky-600 dark:bg-sky-950 dark:text-sky-300" },
   building_collapse: { icon: Building2, label: CATEGORY_LABEL.building_collapse, short: "Building collapse", tile: "from-stone-500 to-amber-800", soft: "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-200" },
   gas_leak: { icon: Wind, label: CATEGORY_LABEL.gas_leak, short: "Gas leak", tile: "from-lime-500 to-emerald-700", soft: "bg-lime-50 text-lime-700 dark:bg-lime-950 dark:text-lime-300" },
-  electrical: { icon: Zap, label: CATEGORY_LABEL.electrical, short: "Electrical", tile: "from-amber-400 to-yellow-600", soft: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300" },
+  landslide: { icon: Mountain, label: CATEGORY_LABEL.landslide, short: "Landslide", tile: "from-amber-600 to-orange-800", soft: "bg-orange-50 text-orange-800 dark:bg-orange-950 dark:text-orange-300" },
+  electrical: { icon: Zap, label: CATEGORY_LABEL.electrical, short: "Power outage", tile: "from-amber-400 to-yellow-600", soft: "bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300" },
   other: { icon: AlertTriangle, label: CATEGORY_LABEL.other, short: "Other", tile: "from-violet-500 to-indigo-700", soft: "bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-300" },
 };
 export const CATEGORIES = Object.keys(CATEGORY_META) as Category[];
 
+export const ZONE_HEX: Record<"critical" | "evacuate" | "watch" | "safe", string> = { critical: "#dc2626", evacuate: "#ea580c", watch: "#d97706", safe: "#16a34a" };
 export const SEV_HEX: Record<Severity, string> = { Critical: "#dc2626", High: "#ea580c", Medium: "#d97706", Low: "#16a34a" };
 export const SEV_TONE: Record<Severity, "red" | "amber" | "green" | "brand"> = { Critical: "red", High: "brand", Medium: "amber", Low: "green" };
 export const STATUS_TONE: Record<Status, "gray" | "amber" | "blue" | "green"> = { Reported: "gray", Pending: "amber", "In Progress": "blue", Resolved: "green" };

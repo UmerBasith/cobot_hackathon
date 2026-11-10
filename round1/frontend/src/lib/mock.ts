@@ -5,7 +5,7 @@
  */
 import { areaByName } from "./geo";
 
-export type Category = "fire" | "road_accident" | "medical" | "flood" | "building_collapse" | "gas_leak" | "electrical" | "other";
+export type Category = "fire" | "road_accident" | "medical" | "flood" | "building_collapse" | "gas_leak" | "electrical" | "landslide" | "other";
 export type Severity = "Low" | "Medium" | "High" | "Critical";
 export type Status = "Reported" | "Pending" | "In Progress" | "Resolved";
 export type Injuries = "none" | "minor" | "serious";
@@ -18,6 +18,7 @@ export interface ReportIn {
   people_affected: number; injured_count: number; injuries: Injuries; life_threat: boolean;
   hazard: Hazard; active: boolean; vulnerable: Vulnerable[];
   contact_name?: string; contact_phone?: string;
+  reported_severity?: Severity | null; anonymous?: boolean; photo?: string | null;
 }
 
 export interface Reason { label: string; points: number; rule: string | null }
@@ -29,7 +30,8 @@ export interface SeverityOut {
 
 export interface TimelineEntry { at: string; status: Status; note: string; actor: string }
 
-export interface Incident extends Required<Omit<ReportIn, "lat" | "lng">>, SeverityOut {
+export interface Incident extends Required<Omit<ReportIn, "lat" | "lng" | "reported_severity" | "anonymous" | "photo">>, SeverityOut {
+  reported_severity?: Severity | null; anonymous?: boolean; photo?: string | null;
   id: string; lat: number | null; lng: number | null;
   status: Status; duplicate_of: string | null;
   created_at: string; updated_at: string; timeline: TimelineEntry[];
@@ -66,13 +68,13 @@ export interface Stats {
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   fire: "Fire Emergency", road_accident: "Road Accident", medical: "Medical Emergency", flood: "Flood",
-  building_collapse: "Building Collapse", gas_leak: "Gas Leak", electrical: "Electrical Hazard", other: "Other Emergency",
+  building_collapse: "Building Collapse", gas_leak: "Gas Leak", electrical: "Power Outage / Electrical", landslide: "Landslide", other: "Other Emergency",
 };
 export const SEVERITIES: Severity[] = ["Critical", "High", "Medium", "Low"];
 export const STATUSES: Status[] = ["Reported", "Pending", "In Progress", "Resolved"];
 
 /* ------------------------- fallback severity engine ------------------------ */
-const TIME_CRITICAL: Category[] = ["fire", "gas_leak", "flood", "electrical", "building_collapse"];
+const TIME_CRITICAL: Category[] = ["fire", "gas_leak", "flood", "electrical", "building_collapse", "landslide"];
 const LEVELS: Severity[] = ["Low", "Medium", "High", "Critical"];
 const levelOf = (s: number): Severity => (s >= 70 ? "Critical" : s >= 45 ? "High" : s >= 25 ? "Medium" : "Low");
 
@@ -236,6 +238,7 @@ const SLOTS: Record<Category, [string, TeamType[]][]> = {
   building_collapse: [["NDRF rescue", ["ndrf", "fire"]], ["Ambulance", ["ambulance_als", "ambulance_bls"]]],
   road_accident: [["Ambulance", ["ambulance_als", "ambulance_bls"]], ["Police", ["police"]]],
   medical: [["Ambulance", ["ambulance_als", "ambulance_bls"]]],
+  landslide: [["Search & rescue", ["ndrf", "fire"]], ["Ambulance", ["ambulance_als", "ambulance_bls"]]],
   other: [["Police", ["police"]]],
 };
 /** Offline approximation of /suggest (nearest available team per slot, 25 km/h city speed). */

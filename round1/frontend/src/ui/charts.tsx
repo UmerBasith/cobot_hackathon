@@ -48,7 +48,7 @@ export function AreaChartBox({ data, x, series, height = 280, stacked = false }:
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
         <XAxis dataKey={x} {...axis} />
-        <YAxis {...axis} />
+        <YAxis allowDecimals={false} {...axis} />
         <Tooltip {...tooltipStyle} />
         {series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => (
@@ -78,7 +78,7 @@ export function LineChartBox({ data, x, series, height = 280 }: { data: Row[]; x
   );
 }
 
-export function BarChartBox({ data, x, series, height = 280, horizontal = false }: { data: Row[]; x: string; series: Series[]; height?: number; horizontal?: boolean }) {
+export function BarChartBox({ data, x, series, height = 280, horizontal = false, stacked = false }: { data: Row[]; x: string; series: Series[]; height?: number; horizontal?: boolean; stacked?: boolean }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} layout={horizontal ? "vertical" : "horizontal"} margin={{ top: 8, right: 8, left: horizontal ? 24 : -12, bottom: 0 }}>
@@ -88,8 +88,8 @@ export function BarChartBox({ data, x, series, height = 280, horizontal = false 
         <Tooltip {...tooltipStyle} />
         {series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => (
-          <Bar key={s.key} dataKey={s.key} name={s.label ?? s.key} fill={s.color ?? chartColors[i]}
-            radius={horizontal ? [0, 6, 6, 0] : [6, 6, 0, 0]} maxBarSize={42} animationDuration={1000} isAnimationActive={!STATIC} />
+          <Bar key={s.key} dataKey={s.key} name={s.label ?? s.key} fill={s.color ?? chartColors[i]} stackId={stacked ? "s" : undefined}
+            radius={stacked && i < series.length - 1 ? [0, 0, 0, 0] : horizontal ? [0, 6, 6, 0] : [6, 6, 0, 0]} maxBarSize={42} animationDuration={1000} isAnimationActive={!STATIC} />
         ))}
       </BarChart>
     </ResponsiveContainer>

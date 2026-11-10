@@ -11,6 +11,9 @@ import Kit from "@/pages/Kit";
 import Responder from "@/pages/Responder";
 import Teams from "@/pages/Teams";
 import Alerts from "@/pages/Alerts";
+import Track from "@/pages/Track";
+import Analytics from "@/pages/Analytics";
+import Zones from "@/pages/Zones";
 
 function AdminReport() {
   return (
@@ -31,6 +34,8 @@ export default function App() {
           <Route path="/report" element={<ReportPage />} />
           <Route path="/kit" element={<Kit />} />
           <Route path="/responder" element={<Responder />} />
+          <Route path="/track" element={<Track />} />
+          <Route path="/track/:id" element={<Track />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Dashboard />} />
             <Route path="incidents" element={<Incidents />} />
@@ -38,6 +43,8 @@ export default function App() {
             <Route path="report" element={<AdminReport />} />
             <Route path="teams" element={<Teams />} />
             <Route path="alerts" element={<Alerts />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="zones" element={<Zones />} />
           </Route>
           <Route path="*" element={<Home />} />
         </Routes>

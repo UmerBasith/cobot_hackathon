@@ -2,7 +2,7 @@
 import { useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
-import { AlertOctagon, AlertTriangle, BellRing, ChevronRight, ExternalLink, LayoutDashboard, ListOrdered, Menu, PhoneCall, Smartphone, Truck, Users, X, type LucideIcon } from "lucide-react";
+import { BarChart3, Home, AlertOctagon, AlertTriangle, BellRing, ChevronRight, ExternalLink, LayoutDashboard, ListOrdered, Menu, PhoneCall, Smartphone, Truck, Users, X, type LucideIcon } from "lucide-react";
 import { getEscalations } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import type { Escalation } from "@/lib/mock";
@@ -18,6 +18,8 @@ export const appNav: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/app/incidents", label: "Incidents", icon: ListOrdered },
   { to: "/app/teams", label: "Teams", icon: Users },
   { to: "/app/alerts", label: "Alerts", icon: BellRing },
+  { to: "/app/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/app/zones", label: "Zones & shelters", icon: Home },
   { to: "/app/report", label: "New report", icon: PhoneCall },
 ];
 

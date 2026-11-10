@@ -10,12 +10,11 @@ import { AREAS, CENTER, COAST, nearestArea, project, unproject } from "@/lib/geo
 import type { Severity } from "@/lib/mock";
 import { STATIC } from "@/lib/static";
 import { cn } from "@/lib/cn";
-import { SEV_HEX } from "./IncidentUI";
+import { SEV_HEX, ZONE_HEX } from "./IncidentUI";
+import type { ZoneStatus } from "@/lib/mock";
 
 export interface MapPoint { id: string; lat: number; lng: number; severity: Severity; title: string; resolved?: boolean }
 
-export type ZoneStatus = "critical" | "evacuate" | "watch" | "safe";
-export const ZONE_HEX: Record<ZoneStatus, string> = { critical: "#dc2626", evacuate: "#ea580c", watch: "#d97706", safe: "#16a34a" };
 export interface ZonePoint { id: string; lat: number; lng: number; status: ZoneStatus; label: string }
 export interface ShelterPoint { id: string; lat: number; lng: number; label: string; pct: number }
 const shelterHex = (pct: number) => (pct >= 90 ? "#dc2626" : pct >= 70 ? "#d97706" : "#0284c7");

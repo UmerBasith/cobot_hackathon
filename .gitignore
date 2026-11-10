@@ -10,6 +10,13 @@ scratch-deck/
 .clock.json
 ~$*
 
+<<<<<<< Updated upstream
 # local secrets (map API key)
 .env
 .env.local
+=======
+# private keys (never commit)
+.env
+.env.*
+!.env.example
+>>>>>>> Stashed changes

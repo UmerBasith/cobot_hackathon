@@ -1,5 +1,5 @@
 /**
- * Chennai incident map. MapLibre + OpenFreeMap; if the style fails or takes >6 s,
+ * Chennai incident map. MapLibre + CARTO Voyager; if the style fails or takes >6 s,
  * falls back to an SVG schematic map (same projection) so the demo is never blank.
  * Default export so it can be React.lazy()-loaded.
  */
@@ -28,6 +28,7 @@ export interface IncidentMapProps {
   height?: number | string;
 }
 
+<<<<<<< Updated upstream
 const OPENFREEMAP = "https://tiles.openfreemap.org/styles/liberty";
 const CARTO_KEY = (import.meta.env.VITE_CARTO_KEY as string | undefined)?.trim();
 /** CARTO Voyager raster tiles (needs a free key in .env: VITE_CARTO_KEY). Falls back to OpenFreeMap, then the SVG map. */
@@ -43,6 +44,14 @@ const CARTO_STYLE: maplibregl.StyleSpecification | null = CARTO_KEY ? {
   },
   layers: [{ id: "voyager", type: "raster", source: "voyager" }],
 } : null;
+=======
+// CARTO Voyager basemap (light, clean, labels in English). Key comes from .env.local (VITE_CARTO_API_KEY),
+// never hard-coded or committed. OpenFreeMap is kept as a backup style.
+const CARTO_KEY = (import.meta.env.VITE_CARTO_API_KEY as string | undefined) ?? "";
+const STYLE = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+const withCartoKey = (url: string) =>
+  CARTO_KEY && url.includes("cartocdn.com") ? { url: url + (url.includes("?") ? "&" : "?") + "api_key=" + encodeURIComponent(CARTO_KEY) } : { url };
+>>>>>>> Stashed changes
 
 export default function IncidentMap(props: IncidentMapProps) {
   const [mode, setMode] = useState<"loading" | "map" | "fallback">(STATIC ? "fallback" : "loading");
@@ -91,7 +100,12 @@ function LiveMap({ teams = [], points = [], onSelect, onPick, picked, onMode, vi
     let loaded = false;
     let m: maplibregl.Map;
     try {
+<<<<<<< Updated upstream
       m = new maplibregl.Map({ container: ref.current, style: CARTO_STYLE ?? OPENFREEMAP, center: CENTER, zoom: 10.3, attributionControl: { compact: true } });
+=======
+      m = new maplibregl.Map({ container: ref.current, style: STYLE, center: CENTER, zoom: 10.3, attributionControl: { compact: true },
+        transformRequest: (url) => withCartoKey(url) });
+>>>>>>> Stashed changes
     } catch { onMode("fallback"); return; }
     map.current = m;
     const timer = setTimeout(() => { if (!loaded) onMode("fallback"); }, 6000);

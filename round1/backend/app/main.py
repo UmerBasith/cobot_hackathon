@@ -91,11 +91,14 @@ def reset_data() -> int:
         full = {**DEFAULTS, **report}
         inc = db.insert(lambda seq, r=full, s=status, m=minutes: build_incident(seq, r, s, m))
         if status == "In Progress":  # give in-progress incidents a team that is on the way / on scene
-            teams = list(teams_by_id().values())
-            for slot in suggest(inc, teams)[:1]:
-                if slot["best"]:
-                    a = new_assignment(inc, teams_by_id()[slot["best"]], "on_scene" if minutes > 20 else "en_route",
-                                       now_iso(max(0, minutes - 3)))
+            tmap = teams_by_id()
+            # keep the boats free for the demo: waterlogging gets the local police patrol instead
+            pick = next((s["best"] for s in suggest(inc, list(tmap.values()))
+                         if s["best"] and tmap[s["best"]]["type"] != "boat"), None)
+            if not pick:
+                pick = min((t for t in tmap.values() if t["type"] == "police" and t["status"] == "available"),
+                           key=lambda t: eta(t, inc["lat"], inc["lng"])[1])["id"]
+            new_assignment(inc, tmap[pick], "on_scene" if minutes > 20 else "en_route", now_iso(max(0, minutes - 3)))
             db.save(inc)
     put_alert({"area": "Velachery", "message": "Heavy flooding near Velachery lake. Move to upper floors, avoid 100 Feet Road.",
                "level": "danger", "hours": 6})

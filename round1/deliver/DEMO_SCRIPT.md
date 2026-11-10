@@ -18,10 +18,10 @@
 | 1:55 | "Every incident shows its score, reasons, and full details." | Click the new incident |
 | 2:10 | "Admin moves it: Pending → In Progress → Resolved. Every change is in the timeline with time and note." | Click the status buttons |
 | 2:30 | "Duplicate or test reports? Mark as duplicate, or delete with confirmation." | Incidents list → mark one as duplicate / delete a test |
-| 2:45 | "Rules decide severity, humans manage, every incident is tracked to resolution. 20 automated tests check every rule. Next round: dispatching the right teams." | Back to dashboard |
+| 2:45 | "Rules decide severity, humans manage, every incident is tracked to resolution. 24 automated tests check every rule. Next round: dispatching the right teams." | Back to dashboard |
 
 ## Numbers you can say (all real)
-- **20 automated tests pass** (every severity rule + API: create, status, duplicate, delete, validation).
+- **24 automated tests pass** (every severity rule + API: create, status, duplicate, delete, validation, dispatch, responder, alerts, simulate).
 - **4 severity levels, 8 categories, 4 statuses** — exactly the brief, plus Gas Leak & Electrical Hazard.
 - Score 0–100 from 5 factors: Life threat (35) · Hazard (25) · Exposure (20) · Vulnerable people (10) · Time-critical (6). Highest possible: 96.
 
@@ -36,3 +36,36 @@
 | How does it scale? | Production design: PostgreSQL + PostGIS, a queue for spikes, CDN for the citizen page. Today: FastAPI + SQLite on one laptop. |
 | What's next? | Round 2: right-team dispatch, responder app, duplicate linking, escalation alarms, alerts to citizens. |
 | Privacy? | Contact info is optional and only visible to the control room. |
+
+---
+
+# Round 2 demo add-on (same app — extra 2 minutes)
+
+Extra windows: **C** = http://localhost:5173/responder?team=ALS-VLC (phone size).
+Before: click **Reset** on the dashboard.
+
+| Time | Say | Click |
+|---|---|---|
+| 0:00 | "Round 1 told us *what* is urgent. Round 2 sends the *right* team." | `/app/incidents/INC-1012` (rooftop family, Velachery) |
+| 0:15 | "For a rooftop flood it needs a rescue boat and an ambulance — matched by skill first, then arrival time. Boat 3 minutes, ALS ambulance 3 minutes." | **Dispatch** card → **Assign all suggested** |
+| 0:35 | "The ambulance crew gets it on their phone with the reasons." | Window C: **Accept** → **En route** → **On scene** |
+| 0:55 | "If a team can't go, they reject with a reason and the next best team is suggested." | (optional) assign a second team, **Reject** → "No equipment" → back on detail, next suggestion shows |
+| 1:10 | "Now the flood gets worse." | Dashboard → **Simulate flood** |
+| 1:20 | "8 new reports. The red escalation banner fires: critical incidents with no team for over 2 minutes." | Point at escalation banner |
+| 1:30 | "Three people reported the same rooftop. We link them — 3 reports, more confidence, the score goes up." | INC-1012 → **Possible duplicates** → **Link as duplicate** |
+| 1:45 | "Warn the public: alert to Velachery. Every citizen opening the report page sees it." | `/app/alerts` → area Velachery → Publish → window B `/report` shows banner |
+| 2:00 | "Responder finishes with a note, admin resolves. Every step is in the timeline." | C: **Completed** + note → detail: **Resolve** → timeline |
+
+## Round 2 numbers (real)
+- 13 response teams (fire ×4, ALS ×2, BLS ×2, police ×2, NDRF ×1, boat ×2) across Chennai.
+- ETA = 2 min mobilisation + distance ÷ speed (road 25 km/h, boat 20 km/h). Straight-line distance — say "estimated".
+- Escalation: Critical with no team > 2 min, High > 5 min, team not accepting > 1 min, any team type fully busy.
+- Duplicate = related type + within 500 m + within 60 min. Each linked report +3 points; 3+ reports → one level up (R8).
+
+## Round 2 judge questions
+| Question | Answer |
+|---|---|
+| Why not just the nearest team? | Skill first (boat for flood, NDRF for collapse), then arrival time. The nearest fire engine is useless for a rooftop flood. |
+| What if nobody is free? | Escalation banner + "resource shortage" warning; admin sees other candidates further away. |
+| Can the system assign by itself? | It suggests; a human approves with one click. Rules decide priority, humans decide action. |
+| Live tracking? | Today status updates (en route / on scene). Production: GPS from the responder phone + WebSockets. |

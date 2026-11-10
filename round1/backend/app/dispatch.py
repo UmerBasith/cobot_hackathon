@@ -19,6 +19,7 @@ TEAMS_SEED = [
     ("POL-TBM", "Police Patrol · Tambaram", "police", "Tambaram"),
     ("NDRF-VDL", "NDRF Team · Vandalur", "ndrf", "Vandalur"),
     ("BOAT-ADY", "Rescue Boat · Adyar", "boat", "Adyar"),
+    ("BOAT-VLC", "Rescue Boat · Velachery", "boat", "Velachery"),
 ]
 
 TEAM_TYPE_LABELS = {"fire": "Fire engine", "ambulance_als": "ALS ambulance", "ambulance_bls": "BLS ambulance",

@@ -121,7 +121,7 @@ def test_reset(client):
 # ---------- Round 2: dispatch, responder, duplicates, escalation, alerts ----------
 def test_teams_seeded_and_some_busy(client):
     teams = client.get("/api/teams").json()
-    assert len(teams) == 12 and any(t["status"] == "busy" for t in teams)
+    assert len(teams) == 13 and any(t["status"] == "busy" for t in teams)
 
 
 def test_suggest_assign_reject_accept_complete(client):
@@ -167,5 +167,9 @@ def test_alerts_simulate_escalations(client):
     n = client.get("/api/stats").json()["total"]
     sim = client.post("/api/simulate", json={"scenario": "chennai_flood"}).json()
     assert client.get("/api/stats").json()["total"] == n + len(sim["created"])
+    listed = client.get("/api/incidents")
+    assert listed.status_code == 200 and len(listed.json()) == n + len(sim["created"])
+    for i in sim["created"]:
+        assert client.get(f"/api/incidents/{i}").status_code == 200
     esc = client.get("/api/escalations").json()
     assert any(e["level"] == "critical" for e in esc)

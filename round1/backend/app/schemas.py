@@ -91,7 +91,7 @@ class Assignment(BaseModel):
     updated_at: str
 
 
-class Incident(ReportIn, SeverityOut):
+class Incident(PreviewIn, SeverityOut):
     id: str
     status: Status
     duplicate_of: str | None = None

@@ -217,9 +217,10 @@ export const mockTeams: Team[] = [
   T("BLS-ADY", "ambulance_bls", "BLS ambulance", "BLS Ambulance · Adyar", "Adyar"),
   T("BLS-ANN", "ambulance_bls", "BLS ambulance", "BLS Ambulance · Anna Nagar", "Anna Nagar"),
   T("POL-MYL", "police", "Police", "Police Patrol · Mylapore", "Mylapore"),
-  T("POL-TBM", "police", "Police", "Police Patrol · Tambaram", "Tambaram"),
+  T("POL-TBM", "police", "Police", "Police Patrol · Tambaram", "Tambaram", "busy", "INC-1003"),
   T("NDRF-VDL", "ndrf", "NDRF rescue", "NDRF Team · Vandalur", "Vandalur"),
-  T("BOAT-ADY", "boat", "Rescue boat", "Rescue Boat · Adyar", "Adyar", "busy", "INC-1006"),
+  T("BOAT-ADY", "boat", "Rescue boat", "Rescue Boat · Adyar", "Adyar"),
+  T("BOAT-VLC", "boat", "Rescue boat", "Rescue Boat · Velachery", "Velachery"),
 ];
 
 const km = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {

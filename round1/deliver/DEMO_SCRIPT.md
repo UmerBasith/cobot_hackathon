@@ -4,6 +4,7 @@
 - `git pull` → `cd round1\frontend; npm install` (first time only, needs internet) → `powershell -ExecutionPolicy Bypass -File tools\run_app.ps1 -Round round1`
 - Open 2 Chrome windows: **A** = http://localhost:5173 (laptop size) · **B** = http://localhost:5173/report in phone size (F12 → device toolbar → iPhone).
 - Click **Reset demo data** if you tested before (or `POST /api/reset` from http://localhost:8000/docs).
+- Admin control room: http://localhost:5173/admin/login → ID `admin`, PIN `1111`. Responder: /responder/login → pick a team, PIN `2222`.
 - Check the map loads (OpenFreeMap needs internet; without it a built-in Chennai map appears automatically).
 
 **Roles:** Umer talks · Muizzur clicks.
@@ -41,19 +42,19 @@
 
 # Round 2 demo add-on (same app — extra 2 minutes)
 
-Extra windows: **C** = http://localhost:5173/responder?team=ALS-VLC (phone size).
+Extra windows: **C** = http://localhost:5173/responder (phone size; sign in: pick team ALS-VLC, PIN 2222).
 Before: click **Reset** on the dashboard.
 
 | Time | Say | Click |
 |---|---|---|
-| 0:00 | "Round 1 told us *what* is urgent. Round 2 sends the *right* team." | `/app/incidents/INC-1012` (rooftop family, Velachery) |
+| 0:00 | "Round 1 told us *what* is urgent. Round 2 sends the *right* team." | `/admin/incidents/INC-1012` (rooftop family, Velachery) |
 | 0:15 | "For a rooftop flood it needs a rescue boat and an ambulance — matched by skill first, then arrival time. Boat 3 minutes, ALS ambulance 3 minutes." | **Dispatch** card → **Assign all suggested** |
 | 0:35 | "The ambulance crew gets it on their phone with the reasons." | Window C: **Accept** → **En route** → **On scene** |
 | 0:55 | "If a team can't go, they reject with a reason and the next best team is suggested." | (optional) assign a second team, **Reject** → "No equipment" → back on detail, next suggestion shows |
 | 1:10 | "Now the flood gets worse." | Dashboard → **Simulate flood** |
 | 1:20 | "8 new reports. The red escalation banner fires: critical incidents with no team for over 2 minutes." | Point at escalation banner |
 | 1:30 | "Three people reported the same rooftop. We link them — 3 reports, more confidence, the score goes up." | INC-1012 → **Possible duplicates** → **Link as duplicate** |
-| 1:45 | "Warn the public: alert to Velachery. Every citizen opening the report page sees it." | `/app/alerts` → area Velachery → Publish → window B `/report` shows banner |
+| 1:45 | "Warn the public: alert to Velachery. Every citizen opening the report page sees it." | `/admin/alerts` → area Velachery → Publish → window B `/report` shows banner |
 | 2:00 | "Responder finishes with a note, admin resolves. Every step is in the timeline." | C: **Completed** + note → detail: **Resolve** → timeline |
 
 ## Round 2 numbers (real)
@@ -69,3 +70,35 @@ Before: click **Reset** on the dashboard.
 | What if nobody is free? | Escalation banner + "resource shortage" warning; admin sees other candidates further away. |
 | Can the system assign by itself? | It suggests; a human approves with one click. Rules decide priority, humans decide action. |
 | Live tracking? | Today status updates (en route / on scene). Production: GPS from the responder phone + WebSockets. |
+
+---
+
+# ⭐ INNOVATION demo (Round 2 highlight — 90 seconds)
+
+**Pitch:** "Every system ranks emergencies by severity or sends the nearest team. ResQNet dispatches by **survival** — and turns trained citizens into first responders."
+
+Windows: **A** = `/admin/golden-hour` (laptop) · **D** = `/hero` on a phone-size window (pick **Priya S**).
+Before: **Reset Demo**.
+
+| Time | Say | Click |
+|---|---|---|
+| 0:00 | "Survival falls at different speeds. Cardiac arrest: ~10 % per minute. Trapped under debris: hours. ResQNet knows the difference." | Window A: Golden Hour page — lives at risk, lives lost per minute |
+| 0:15 | "So the queue is ranked by lives lost per minute of delay, not by who called first." | Point at Survival ranking |
+| 0:25 | "A man collapses at T. Nagar, not breathing." | Window B `/report`: Medical → Unconscious/not breathing **Yes** → T. Nagar → Submit. Result shows **"3 CPR heroes alerted"** |
+| 0:40 | "The ambulance is 15 minutes away. Priya, a CPR-trained citizen, is 77 metres away. Her phone rings." | Window D: red alert → **I'm going** → **I've arrived** → **Start CPR** (metronome) |
+| 1:00 | "CPR started — look at the survival curve: it bends up. That is a life." | Window A: open the incident → Survival card (green CPR line) |
+| 1:10 | "When 20 emergencies hit at once, Golden Hour plans every team together to save the most lives." | Golden Hour → **Apply Golden Hour plan** |
+| 1:20 | "In 40 simulated disasters: about 31 % more expected survivors than nearest-team-first." | Point at Proof: simulation card |
+
+## Innovation numbers (say exactly this)
+- Simulation: 40 seeded disaster bursts, 25 life-risk incidents each, 13 teams → **Golden Hour ≈ 31 % more expected survivors (+8.2 lives per disaster)** vs nearest-team-first. "Simulation with a simplified survival model."
+- 13 demo CPR heroes across Chennai; a life-threat report automatically alerts the 3 nearest within 3 km.
+- Survival model: survival = 95 % × 0.5^(minutes ÷ half-life); cardiac half-life 7 min (≈10 %/min), CPR slows it ×3.
+
+## Innovation judge questions
+| Question | Answer |
+|---|---|
+| Where do the survival numbers come from? | Simplified from public emergency-medicine guidance (cardiac-arrest survival falls ~7–10 %/min without CPR; trauma "golden hour"; debris survival over hours). They are demo assumptions; in production a medical board would calibrate them. |
+| Isn't it unethical to rank people? | Severity rules still guarantee every life-threat is Critical. Golden Hour only decides *which free team goes where first* when there aren't enough teams — exactly what triage already does, but transparently. A human approves the plan. |
+| Are volunteers safe / trustworthy? | Verified CPR certificate on sign-up, only alerted for medical life-threats, they can decline, and the ambulance is always sent too. Similar apps (GoodSAM, PulsePoint) are used in the UK/US. |
+| Is +31 % real? | It is a simulation result from our own model, seeded and repeatable — not a field result. We say "in simulation". |

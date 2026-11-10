@@ -8,7 +8,7 @@ param([string]$Round = "round1")
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot
 $r = Join-Path $root $Round
-if (-not (Test-Path "$r\frontend\package.json")) { throw "No app in $r. Run tools\new_round.ps1 -Round $Round first." }
+if (-not (Test-Path "$r\frontend\package.json")) { throw "No app in $r. Check the folder name." }
 New-Item -ItemType Directory -Force "$r\logs" | Out-Null
 
 & (Join-Path $PSScriptRoot "stop_app.ps1") -Quiet

@@ -157,7 +157,7 @@ export default function Dashboard() {
                 <span className={cn("relative h-4 w-7 rounded-full transition", heat ? "bg-red-600" : "bg-slate-300")}><span className={cn("absolute top-0.5 size-3 rounded-full bg-white transition-all", heat ? "left-3.5" : "left-0.5")} /></span>Heatmap
               </button>
             </div>
-            <LazyMap height={400} points={points} onSelect={(id) => nav(`/app/incidents/${id}`)}
+            <LazyMap height={400} points={points} onSelect={(id) => nav(`/admin/incidents/${id}`)}
               zones={heat ? (zones ?? []).map((z) => ({ id: z.id, lat: z.lat, lng: z.lng, status: z.status, label: z.area })) : undefined} />
             <p className="mt-2 text-xs text-muted">{points.length} incident{points.length === 1 ? "" : "s"} shown{heat ? " · zone risk overlay on" : ""}</p>
           </CardBody>
@@ -172,7 +172,7 @@ export default function Dashboard() {
                   <thead><tr className="text-left text-xs uppercase tracking-wide text-muted"><th className="py-2 pr-2">#</th><th className="py-2 pr-2">Type</th><th className="py-2 pr-2">Location</th><th className="py-2 pr-2">Priority</th><th className="py-2 text-right">Waiting</th></tr></thead>
                   <tbody>
                     {queue.map((i, k) => (
-                      <tr key={i.id} onClick={() => nav(`/app/incidents/${i.id}`)} className={cn("cursor-pointer border-t border-slate-100 hover:bg-slate-50 dark:border-line dark:hover:bg-surface-2", i.severity === "Critical" && "bg-red-50/50 dark:bg-red-950/20")}>
+                      <tr key={i.id} onClick={() => nav(`/admin/incidents/${i.id}`)} className={cn("cursor-pointer border-t border-slate-100 hover:bg-slate-50 dark:border-line dark:hover:bg-surface-2", i.severity === "Critical" && "bg-red-50/50 dark:bg-red-950/20")}>
                         <td className="py-2 pr-2 font-mono text-xs text-muted">{k + 1}</td>
                         <td className="py-2 pr-2"><CategoryIcon category={i.category} className="size-7" /></td>
                         <td className="max-w-0 py-2 pr-2"><p className="truncate font-medium">{i.area}</p><p className="truncate text-xs text-muted">{CATEGORY_META[i.category]?.short ?? i.category}</p></td>
@@ -183,14 +183,14 @@ export default function Dashboard() {
                   </tbody>
                 </table>
               )}
-              <Link to="/app/incidents" className="mt-2 flex items-center justify-center gap-1 rounded-lg py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">View All Incidents <ArrowRight className="size-4" /></Link>
+              <Link to="/admin/incidents" className="mt-2 flex items-center justify-center gap-1 rounded-lg py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30">View All Incidents <ArrowRight className="size-4" /></Link>
             </CardBody>
           </Card>
           {topEsc && (
             <div className="rounded-2xl border border-red-200 bg-gradient-to-br from-red-600 to-red-700 p-4 text-white shadow-lg shadow-red-900/20">
               <div className="flex items-center gap-2"><span className="relative grid place-items-center"><span className="absolute size-6 animate-ping rounded-full bg-white/30" /><Bell className="relative size-5" /></span><p className="font-semibold">Escalation Alert</p><span className="ml-auto rounded-full bg-white/20 px-2 py-0.5 text-xs font-semibold">{esc!.length} active</span></div>
               <p className="mt-2 text-sm text-red-50">{topEsc.message}</p>
-              <Link to={topEsc.incident_id ? `/app/incidents/${topEsc.incident_id}` : "/app/incidents"} className="mt-3 inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50">View Details <ArrowRight className="size-4" /></Link>
+              <Link to={topEsc.incident_id ? `/admin/incidents/${topEsc.incident_id}` : "/admin/incidents"} className="mt-3 inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50">View Details <ArrowRight className="size-4" /></Link>
             </div>
           )}
         </div>
@@ -199,13 +199,13 @@ export default function Dashboard() {
       <div className="mt-4 grid gap-4 xl:grid-cols-5">
         <Card className="min-w-0 xl:col-span-2">
           <CardHeader title="Response Teams (Live)" subtitle="Available / total by unit type" icon={Truck}
-            action={<Link to="/app/teams" className="text-sm font-medium text-red-600 hover:underline">Open</Link>} />
+            action={<Link to="/admin/teams" className="text-sm font-medium text-red-600 hover:underline">Open</Link>} />
           <CardBody className="grid grid-cols-2 gap-3 pt-0">
             {!teams ? <Skeleton className="col-span-2 h-40" /> : GROUPS.map((g) => {
               const all = teams.filter((t) => g.types.includes(t.type));
               const a = all.filter((t) => t.status === "available").length;
               return (
-                <Link key={g.label} to="/app/teams" className="rounded-xl border border-slate-200 p-3 transition hover:-translate-y-0.5 hover:shadow-md dark:border-line">
+                <Link key={g.label} to="/admin/teams" className="rounded-xl border border-slate-200 p-3 transition hover:-translate-y-0.5 hover:shadow-md dark:border-line">
                   <div className="flex items-center gap-2"><span className={cn("grid size-8 place-items-center rounded-lg", g.tone)}><g.icon className="size-4" /></span><p className="text-sm font-medium leading-tight">{g.label}</p></div>
                   <p className="mt-2 font-display text-2xl font-bold">{a}<span className="text-base font-medium text-muted">/{all.length}</span></p>
                   <p className={cn("text-xs font-semibold", a ? "text-emerald-600" : "text-red-600")}>{a} Available</p>
@@ -218,9 +218,9 @@ export default function Dashboard() {
           <CardHeader title="Incident Quick Actions" icon={Zap} />
           <CardBody className="space-y-2 pt-0">
             {[
-              { to: "/app/incidents", label: "Assign Team", text: "Dispatch nearest unit", icon: UserPlus, cls: "bg-red-600 text-white" },
-              { to: "/app/teams", label: "Request Resources", text: "Boats, NDRF, ambulances", icon: Truck, cls: "bg-[#0f1b33] text-white" },
-              { to: "/app/alerts", label: "Send Alert", text: "Warn citizens in a zone", icon: Bell, cls: "bg-amber-500 text-white" },
+              { to: "/admin/incidents", label: "Assign Team", text: "Dispatch nearest unit", icon: UserPlus, cls: "bg-red-600 text-white" },
+              { to: "/admin/teams", label: "Request Resources", text: "Boats, NDRF, ambulances", icon: Truck, cls: "bg-[#0f1b33] text-white" },
+              { to: "/admin/alerts", label: "Send Alert", text: "Warn citizens in a zone", icon: Bell, cls: "bg-amber-500 text-white" },
             ].map((a) => (
               <Link key={a.label} to={a.to} className="flex items-center gap-3 rounded-xl border border-slate-200 p-2.5 transition hover:bg-slate-50 dark:border-line dark:hover:bg-surface-2">
                 <span className={cn("grid size-9 place-items-center rounded-lg", a.cls)}><a.icon className="size-4" /></span>

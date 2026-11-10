@@ -6,6 +6,7 @@ import {
   Bell, ChevronDown, Home, Info, Megaphone, Menu, MonitorCog, Phone, Radar, ShieldCheck, Siren, Truck, UserRound, X, LayoutGrid, type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { BrandMark, NAVY } from "./Logo";
 
 export const RED = "#e53935";
 
@@ -23,15 +24,11 @@ function isActive(path: string, to: string) {
 
 export function CitizenLogo() {
   return (
-    <Link to="/" className="flex items-center gap-2.5">
-      <span className="grid size-9 place-items-center rounded-xl text-white shadow-md" style={{ background: `linear-gradient(135deg, ${RED}, #b71c1c)` }}>
-        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" /><path d="M12 8.5v7M8.5 12h7" />
-        </svg>
-      </span>
+    <Link to="/" className="flex items-center gap-2">
+      <BrandMark className="h-9" />
       <span className="leading-tight">
-        <span className="block font-display text-lg font-bold text-slate-900 dark:text-white">ResQ<span style={{ color: RED }}>Net</span></span>
-        <span className="hidden text-[11px] text-slate-500 sm:block">Citizen Emergency Services</span>
+        <span className="block font-display text-xl font-extrabold tracking-tight dark:text-white" style={{ color: NAVY }}>ResQNet</span>
+        <span className="block text-[10px] font-medium text-slate-500 sm:text-[11px]">Citizen Emergency Platform</span>
       </span>
     </Link>
   );
@@ -47,15 +44,15 @@ function RoleMenu() {
   }, []);
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pr-3 pl-1.5 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
-        <span className="grid size-7 place-items-center rounded-full bg-slate-100 dark:bg-slate-800"><UserRound className="size-4" /></span>
-        Citizen <ChevronDown className="size-4 text-slate-400" />
+      <button type="button" onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3.5 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-50 dark:border-blue-900 dark:bg-slate-900 dark:text-blue-300">
+        <UserRound className="size-4" />
+        Citizen <ChevronDown className="size-4" />
       </button>
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl dark:border-slate-700 dark:bg-slate-900">
           {[
             { to: "/", label: "Citizen", icon: UserRound },
-            { to: "/app", label: "Control room", icon: MonitorCog },
+            { to: "/admin", label: "Control room", icon: MonitorCog },
             { to: "/responder", label: "Responder", icon: Truck },
             { to: "/about", label: "About ResQNet", icon: Info },
           ].map((x) => (
@@ -86,23 +83,20 @@ export function CitizenShell({ children }: { children: ReactNode }) {
             {NAV.map((n) => {
               const act = isActive(pathname, n.to);
               return (
-                <Link key={n.to} to={n.to} className={cn("relative px-3 py-5 text-sm font-medium transition-colors lg:px-4", act ? "" : "text-slate-600 hover:text-slate-900 dark:text-slate-300")} style={act ? { color: RED } : undefined}>
+                <Link key={n.to} to={n.to} className={cn("relative px-3 py-5 text-[15px] transition-colors lg:px-4", act ? "font-bold text-slate-900 dark:text-white" : "font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300")}>
                   {n.label}
-                  {act && <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full lg:inset-x-4" style={{ background: RED }} />}
+                  {act && <span className="absolute inset-x-3 bottom-3 h-[3px] rounded-full lg:inset-x-4" style={{ background: RED }} />}
                 </Link>
               );
             })}
           </nav>
           <div className="hidden items-center gap-2 md:flex">
-            <a href="tel:112" className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-90" style={{ background: RED }}>
-              <Phone className="size-4" />Call 112
-            </a>
             <RoleMenu />
           </div>
           <div className="flex items-center gap-1 md:hidden">
-            <Link to="/alerts" className="relative grid size-10 place-items-center rounded-xl text-slate-700 dark:text-slate-200" aria-label="Alerts">
-              <Bell className="size-5" /><span className="absolute top-2 right-2 size-2 rounded-full" style={{ background: RED }} />
-            </Link>
+            <button type="button" onClick={() => setDrawer(true)} className="grid size-10 place-items-center rounded-full text-slate-700 dark:text-slate-200" aria-label="Account and roles">
+              <UserRound className="size-6 rounded-full ring-2 ring-slate-700 p-0.5 dark:ring-slate-200" />
+            </button>
           </div>
         </div>
       </header>
@@ -126,7 +120,7 @@ export function CitizenShell({ children }: { children: ReactNode }) {
               </nav>
               <p className="mt-6 mb-2 px-3 text-xs font-semibold tracking-wide text-slate-400 uppercase">Switch role</p>
               <nav className="space-y-1">
-                <Link to="/app" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"><MonitorCog className="size-5 text-slate-400" />Control room</Link>
+                <Link to="/admin" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"><MonitorCog className="size-5 text-slate-400" />Control room</Link>
                 <Link to="/responder" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"><Truck className="size-5 text-slate-400" />Responder</Link>
                 <Link to="/about" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-slate-800"><Info className="size-5 text-slate-400" />About ResQNet</Link>
               </nav>
@@ -141,7 +135,7 @@ export function CitizenShell({ children }: { children: ReactNode }) {
       <footer className="hidden border-t border-slate-200 bg-white md:block dark:border-slate-800 dark:bg-slate-950">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-6 text-sm text-slate-500">
           <p className="flex items-center gap-2"><ShieldCheck className="size-4" style={{ color: RED }} />ResQNet · Chennai citizen emergency platform · In danger? Call <a href="tel:112" className="font-semibold" style={{ color: RED }}>112</a></p>
-          <div className="flex gap-4"><Link to="/about" className="hover:text-slate-900">About ResQNet</Link><Link to="/app" className="hover:text-slate-900">Control room</Link><Link to="/responder" className="hover:text-slate-900">Responder</Link></div>
+          <div className="flex gap-4"><Link to="/about" className="hover:text-slate-900">About ResQNet</Link><Link to="/admin" className="hover:text-slate-900">Control room</Link><Link to="/responder" className="hover:text-slate-900">Responder</Link></div>
         </div>
       </footer>
 

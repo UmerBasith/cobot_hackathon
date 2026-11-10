@@ -1,4 +1,5 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import Login, { RequireRole } from "@/pages/Login";
 import { ToastProvider } from "@/ui";
 import { AppShell, PageIntro } from "@/sections/AppShell";
 import { ReportFlow } from "@/sections/ReportFlow";
@@ -28,7 +29,18 @@ function AdminReport() {
   );
 }
 
-/** Routes: "/" landing, "/report" citizen, "/app/*" control room, "/kit" component showcase. */
+/** Old /app/* links keep working: they move to /admin/*. */
+function LegacyAppRedirect() {
+  const { pathname, search } = useLocation();
+  return <Navigate to={pathname.replace(/^\/app/, "/admin") + search} replace />;
+}
+
+/**
+ * Role-based entry points:
+ *   /            citizen (open to everyone, no login)
+ *   /admin       control room  (login: /admin/login)
+ *   /responder   field teams   (login: /responder/login)
+ */
 export default function App() {
   return (
     <ToastProvider>
@@ -40,10 +52,13 @@ export default function App() {
           <Route path="/alerts" element={<CitizenAlerts />} />
           <Route path="/report" element={<ReportPage />} />
           <Route path="/kit" element={<Kit />} />
-          <Route path="/responder" element={<Responder />} />
           <Route path="/track" element={<Track />} />
           <Route path="/track/:id" element={<Track />} />
-          <Route path="/app" element={<AppShell />}>
+          <Route path="/responder/login" element={<Login role="responder" />} />
+          <Route path="/responder" element={<RequireRole role="responder"><Responder /></RequireRole>} />
+          <Route path="/admin/login" element={<Login role="admin" />} />
+          <Route path="/app/*" element={<LegacyAppRedirect />} />
+          <Route path="/admin" element={<RequireRole role="admin"><AppShell /></RequireRole>}>
             <Route index element={<Dashboard />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="incidents/:id" element={<IncidentDetail />} />

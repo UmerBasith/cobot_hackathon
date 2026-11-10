@@ -2,36 +2,34 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion } from "motion/react";
-import { AlertOctagon, AlertTriangle, BarChart3, Bell, BellRing, ChevronDown, ChevronRight, CloudRain, ExternalLink, Home, LayoutDashboard, ListOrdered, Menu, Monitor, MoreHorizontal, PhoneCall, RotateCcw, Settings, Smartphone, Truck, Users, Wifi, X, type LucideIcon } from "lucide-react";
+import { AlertOctagon, AlertTriangle, BarChart3, Bell, BellRing, ChevronDown, ChevronRight, CloudRain, ExternalLink, Home, LayoutDashboard, ListOrdered, LogOut, Menu, Monitor, MoreHorizontal, PhoneCall, RotateCcw, Settings, Smartphone, Truck, Users, Wifi, X, type LucideIcon } from "lucide-react";
 import { errText, getEscalations, getStats, getTeams, resetDemo, simulateFlood } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import type { Escalation, Stats, Team } from "@/lib/mock";
 import { cn } from "@/lib/cn";
+import { BrandMark } from "./Logo";
+import { getSession, logout } from "@/lib/auth";
 import { useToast } from "@/ui";
 import { ThemeToggle } from "./ThemeToggle";
 import { Call112 } from "./IncidentUI";
 
 type NavItem = { to: string; label: string; icon: LucideIcon; badge?: "open" | "teams" };
 export const appNav: NavItem[] = [
-  { to: "/app", label: "Command Centre", icon: LayoutDashboard },
-  { to: "/app/incidents", label: "Incidents", icon: ListOrdered, badge: "open" },
-  { to: "/app/teams", label: "Response Teams", icon: Users, badge: "teams" },
-  { to: "/app/alerts", label: "Alerts", icon: BellRing },
-  { to: "/app/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/app/zones", label: "Zones & Shelters", icon: Home },
-  { to: "/app/report", label: "New Report", icon: PhoneCall },
+  { to: "/admin", label: "Command Centre", icon: LayoutDashboard },
+  { to: "/admin/incidents", label: "Incidents", icon: ListOrdered, badge: "open" },
+  { to: "/admin/teams", label: "Response Teams", icon: Users, badge: "teams" },
+  { to: "/admin/alerts", label: "Alerts", icon: BellRing },
+  { to: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/admin/zones", label: "Zones & Shelters", icon: Home },
+  { to: "/admin/report", label: "New Report", icon: PhoneCall },
 ];
 
 function SideLogo() {
   return (
     <Link to="/" className="flex items-center gap-2.5">
-      <span className="grid size-9 place-items-center rounded-xl bg-red-600 text-white shadow-lg shadow-red-900/40">
-        <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" /><path d="M12 8.5v7M8.5 12h7" />
-        </svg>
-      </span>
+      <BrandMark tile className="size-10" />
       <span className="leading-tight">
-        <span className="block font-display text-lg font-bold text-white">ResQ<span className="text-red-500">Net</span></span>
+        <span className="block font-display text-lg font-bold text-white">ResQNet</span>
         <span className="block text-[10px] font-medium tracking-wide text-slate-400">Emergency Response Platform</span>
       </span>
     </Link>
@@ -50,7 +48,7 @@ function SideNav({ onClick }: { onClick?: () => void }) {
       {appNav.map((n) => {
         const b = badge(n.badge);
         return (
-          <NavLink key={n.to} to={n.to} end={n.to !== "/app/incidents"} onClick={onClick}
+          <NavLink key={n.to} to={n.to} end={n.to !== "/admin/incidents"} onClick={onClick}
             className={({ isActive }) => cn("relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
               isActive ? "text-white" : "text-slate-300 hover:bg-white/5 hover:text-white")}>
             {({ isActive }) => (
@@ -101,7 +99,7 @@ function SidebarBody({ onClick }: { onClick?: () => void }) {
       <div className="flex-1 overflow-y-auto">
         <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">Main</p>
         <SideNav onClick={onClick} />
-        <NavLink to="/app" end onClick={onClick} className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white">
+        <NavLink to="/admin" end onClick={onClick} className="mt-1 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white">
           <Settings className="size-[18px]" />Settings
         </NavLink>
         <div className="mt-5"><SideOps onDone={onClick} /></div>
@@ -127,10 +125,10 @@ function useUptime() {
 }
 
 const mobileTabs: { to: string; label: string; icon: LucideIcon }[] = [
-  { to: "/app", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/app/incidents", label: "Incidents", icon: ListOrdered },
-  { to: "/app/teams", label: "Teams", icon: Users },
-  { to: "/app/alerts", label: "Alerts", icon: BellRing },
+  { to: "/admin", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/admin/incidents", label: "Incidents", icon: ListOrdered },
+  { to: "/admin/teams", label: "Teams", icon: Users },
+  { to: "/admin/alerts", label: "Alerts", icon: BellRing },
 ];
 
 export function AppShell() {
@@ -164,14 +162,15 @@ export function AppShell() {
           <div className="ml-auto flex items-center gap-2">
             <Call112 compact className="hidden sm:inline-flex" />
             <ThemeToggle />
-            <Link to="/app/alerts" className="relative grid size-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-slate-900 dark:border-line dark:bg-surface dark:text-muted" aria-label="Escalations">
+            <Link to="/admin/alerts" className="relative grid size-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-slate-900 dark:border-line dark:bg-surface dark:text-muted" aria-label="Escalations">
               <Bell className="size-[18px]" />
               {escCount > 0 && <span className="absolute -right-1.5 -top-1.5 grid min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-white dark:ring-surface">{escCount}</span>}
             </Link>
-            <button className="flex items-center gap-2 rounded-xl px-1.5 py-1 hover:bg-slate-100 dark:hover:bg-surface-2" title="Control room operator">
+            <button className="flex items-center gap-2 rounded-xl px-1.5 py-1 hover:bg-slate-100 dark:hover:bg-surface-2" title={`Signed in as ${getSession("admin")?.name ?? "Admin"}`}>
               <span className="grid size-8 place-items-center rounded-full bg-[#0f1b33] text-xs font-semibold text-white">AD</span>
               <span className="hidden text-sm font-medium sm:inline">Admin</span><ChevronDown className="hidden size-4 text-slate-400 sm:block" />
             </button>
+            <button onClick={() => { logout("admin"); window.location.assign("/admin/login"); }} className="grid size-9 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-red-600 dark:border-line dark:bg-surface dark:text-muted" aria-label="Log out" title="Log out"><LogOut className="size-[18px]" /></button>
           </div>
         </header>
         <EscalationBanner />
@@ -181,7 +180,7 @@ export function AppShell() {
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 border-t border-slate-200 bg-white lg:hidden dark:border-line dark:bg-surface">
         {mobileTabs.map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.to !== "/app/incidents"} className={({ isActive }) => cn("flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium", isActive ? "text-red-600" : "text-slate-500")}>
+          <NavLink key={t.to} to={t.to} end={t.to !== "/admin/incidents"} className={({ isActive }) => cn("flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium", isActive ? "text-red-600" : "text-slate-500")}>
             <t.icon className="size-5" />{t.label}
           </NavLink>
         ))}
@@ -215,7 +214,7 @@ function EscalationBanner() {
   const row = (e: Escalation, i: number) => {
     const inner = (<><span className="min-w-0 flex-1 truncate">{e.message}</span>{e.incident_id && <ChevronRight className="size-4 shrink-0 opacity-70" />}</>);
     const cls = "flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-black/5 dark:hover:bg-white/5";
-    return e.incident_id ? <Link key={i} to={`/app/incidents/${e.incident_id}`} className={cls}>{inner}</Link> : <div key={i} className={cls}>{inner}</div>;
+    return e.incident_id ? <Link key={i} to={`/admin/incidents/${e.incident_id}`} className={cls}>{inner}</Link> : <div key={i} className={cls}>{inner}</div>;
   };
   return (
     <div className={cn("border-b px-4 py-2 sm:px-6", isCrit ? "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/60 dark:text-red-100" : "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/60 dark:text-amber-100")}>

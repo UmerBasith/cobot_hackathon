@@ -16,7 +16,7 @@ export function CitizenHeader() {
         <div className="flex items-center gap-1.5 sm:gap-2">
           <Link to="/report" className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted hover:text-fg md:inline-flex"><Siren className="size-4" />Report</Link>
           <Link to="/track" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted hover:text-fg"><Search className="size-4" /><span className="hidden min-[380px]:inline">Track</span><span className="hidden sm:inline">&nbsp;report</span></Link>
-          <Link to="/app" className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted hover:text-fg lg:inline-flex"><LayoutDashboard className="size-4" />Control room</Link>
+          <Link to="/admin" className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-muted hover:text-fg lg:inline-flex"><LayoutDashboard className="size-4" />Control room</Link>
           <ThemeToggle />
           <Call112 compact />
         </div>

@@ -149,7 +149,7 @@ export function SimilarCard({ inc, onChange }: { inc: Incident; onChange: () => 
           <div key={s.id} className="rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/30">
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
-                <Link to={`/app/incidents/${s.id}`} className="block truncate text-sm font-medium hover:underline">{s.title}</Link>
+                <Link to={`/admin/incidents/${s.id}`} className="block truncate text-sm font-medium hover:underline">{s.title}</Link>
                 <p className="text-xs text-muted">{s.id} · {Math.round(s.distance_m)} m away · {Math.round(s.minutes_apart)} min apart</p>
               </div>
               <SeverityBadge severity={s.severity} />

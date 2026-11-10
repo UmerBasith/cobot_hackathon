@@ -77,7 +77,7 @@ export default function TeamDetail() {
           <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" /><Input className="w-full pl-9" placeholder="Search teams" value={q} onChange={(e) => setQ(e.target.value)} /></div>
           <div className="max-h-[560px] space-y-1 overflow-y-auto">
             {shown.map((t) => (
-              <button key={t.id} onClick={() => nav(`/app/teams/${t.id}`)}
+              <button key={t.id} onClick={() => nav(`/admin/teams/${t.id}`)}
                 className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-sm ${t.id === team.id ? "bg-brand-50 ring-1 ring-brand-200 dark:bg-brand-500/10 dark:ring-brand-500/30" : "hover:bg-surface-2"}`}>
                 <TeamIcon type={t.type} />
                 <span className="min-w-0 flex-1"><span className="block truncate font-medium">{t.name}</span><span className="font-mono text-xs text-muted">{t.id}</span></span>
@@ -91,7 +91,7 @@ export default function TeamDetail() {
       <div className="min-w-0 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Link to="/app/teams" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-brand-600"><ArrowLeft className="size-3" />Team management</Link>
+            <Link to="/admin/teams" className="mb-1 inline-flex items-center gap-1 text-xs text-muted hover:text-brand-600"><ArrowLeft className="size-3" />Team management</Link>
             <h1 className="font-display text-2xl font-semibold tracking-tight">{team.id} — {team.type_label}</h1>
             <p className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted">{team.name} · {team.station} <Badge tone={tone} dot>{status}</Badge></p>
           </div>
@@ -173,7 +173,7 @@ export default function TeamDetail() {
           {(tab === "overview" || tab === "perf") && (
             <Card className="md:col-span-2"><CardHeader title="Assignment History" subtitle={`${history.length} assignments`} icon={History} /><CardBody className="space-y-2">
               {history.length === 0 ? <p className="text-sm text-muted">No assignments yet for this team.</p> : history.slice(0, 6).map(({ a, i }) => (
-                <Link key={a.id} to={`/app/incidents/${i.id}`} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2 text-sm hover:bg-surface-2/60">
+                <Link key={a.id} to={`/admin/incidents/${i.id}`} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2 text-sm hover:bg-surface-2/60">
                   <Badge tone={i.severity === "Critical" ? "red" : i.severity === "High" ? "amber" : "blue"}>{P_OF[i.severity]}</Badge>
                   <span className="min-w-0 flex-1 truncate">{i.title}</span>
                   <span className="whitespace-nowrap text-xs text-muted">{a.status.replace("_", " ")} · {a.eta_min} min</span>

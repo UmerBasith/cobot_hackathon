@@ -35,7 +35,7 @@ export function Navbar() {
         <div className="flex items-center gap-2">
           <ThemeToggle />
           <Link to="/track" className="hidden sm:block"><Button size="sm" variant="ghost" icon={Radar}>Track report</Button></Link>
-          <Link to="/app" className="hidden lg:block"><Button size="sm" variant="outline" icon={LayoutDashboard}>Control room</Button></Link>
+          <Link to="/admin" className="hidden lg:block"><Button size="sm" variant="outline" icon={LayoutDashboard}>Control room</Button></Link>
           <Call112 compact />
           <button className="grid size-9 place-items-center rounded-xl border border-line md:hidden" onClick={() => setOpen(!open)} aria-label="Menu">
             {open ? <X className="size-4" /> : <Menu className="size-4" />}
@@ -46,7 +46,7 @@ export function Navbar() {
         <div className="glass border-t border-line px-4 py-4 md:hidden">
           {nav.map((n) => <a key={n.href} href={n.href} onClick={() => setOpen(false)} className="block py-2 text-sm">{n.label}</a>)}
           <Link to="/report"><Button className="mt-2 w-full">{product.primaryCta}</Button></Link>
-          <Link to="/app"><Button variant="outline" className="mt-2 w-full">{product.secondaryCta}</Button></Link>
+          <Link to="/admin"><Button variant="outline" className="mt-2 w-full">{product.secondaryCta}</Button></Link>
           <Link to="/track"><Button variant="ghost" className="mt-2 w-full" icon={Radar}>Track report</Button></Link>
         </div>
       )}
@@ -77,7 +77,7 @@ export function Hero() {
         </motion.p>
         <motion.div className="mt-9 flex flex-wrap items-center justify-center gap-3" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.55, duration: 0.5 }}>
           <Link to="/report"><Button size="lg" icon={Siren}>{product.primaryCta}</Button></Link>
-          <Link to="/app"><Button size="lg" variant="outline" iconRight={ArrowRight}>{product.secondaryCta}</Button></Link>
+          <Link to="/admin"><Button size="lg" variant="outline" iconRight={ArrowRight}>{product.secondaryCta}</Button></Link>
         </motion.div>
         <HeroPreview />
       </div>
@@ -342,7 +342,7 @@ export function CTA() {
           <p className="relative mx-auto mt-4 max-w-xl text-white/80">Rules decide, humans manage, every incident tracked to resolution.</p>
           <div className="relative mt-8 flex flex-wrap justify-center gap-3">
             <Link to="/report"><Button size="lg" variant="secondary" className="bg-white text-brand-700" icon={Siren}>{product.primaryCta}</Button></Link>
-            <Link to="/app"><Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20" icon={Sparkles}>{product.secondaryCta}</Button></Link>
+            <Link to="/admin"><Button size="lg" variant="outline" className="border-white/40 bg-white/10 text-white hover:bg-white/20" icon={Sparkles}>{product.secondaryCta}</Button></Link>
           </div>
         </div>
       </Reveal>

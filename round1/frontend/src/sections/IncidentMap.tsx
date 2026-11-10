@@ -32,8 +32,37 @@ export interface IncidentMapProps {
   /** Pick mode: tap the map to choose a location. */
   onPick?: (p: { lat: number; lng: number; area: string }) => void;
   picked?: { lat: number; lng: number } | null;
+  /** The viewer's live GPS position: pulsing blue dot + accuracy circle. */
+  me?: { lat: number; lng: number; accuracy?: number } | null;
+  /** Fly to `me` on the first fix (true by default when `me` is given). */
+  followMe?: boolean;
   className?: string;
   height?: number | string;
+}
+
+const ME_BLUE = "#2563eb";
+
+/** Circle polygon (GeoJSON) around a point, radius in metres — for the GPS accuracy halo. */
+function circleGeo(lat: number, lng: number, radiusM: number) {
+  const pts: [number, number][] = [];
+  const dLat = radiusM / 111320, dLng = radiusM / (111320 * Math.cos((lat * Math.PI) / 180));
+  for (let i = 0; i <= 64; i++) {
+    const t = (i / 64) * 2 * Math.PI;
+    pts.push([lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)]);
+  }
+  return { type: "Feature" as const, properties: {}, geometry: { type: "Polygon" as const, coordinates: [pts] } };
+}
+
+function meEl() {
+  const outer = document.createElement("div"); // MapLibre owns this element's position — don't style it
+  outer.title = "You are here";
+  const el = document.createElement("div");
+  el.style.cssText = `position:relative;width:18px;height:18px;border-radius:999px;background:${ME_BLUE};border:3px solid white;box-shadow:0 0 0 1px rgb(37 99 235/.4),0 2px 8px rgb(0 0 0/.35)`;
+  const ring = document.createElement("span");
+  ring.style.cssText = `position:absolute;inset:-6px;border-radius:999px;border:2px solid ${ME_BLUE};animation:sos-ring 1.8s ease-out infinite`;
+  el.appendChild(ring);
+  outer.appendChild(el);
+  return outer;
 }
 
 const OPENFREEMAP = "https://tiles.openfreemap.org/styles/liberty";
@@ -107,7 +136,9 @@ function shelterEl(sh: ShelterPoint) {
   return el;
 }
 
-function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
+function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, me, followMe = true, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
+  const meMarker = useRef<maplibregl.Marker | null>(null);
+  const flewToMe = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
@@ -174,6 +205,26 @@ function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect,
     if (picked) pickMarker.current = new maplibregl.Marker({ color: "#dc2626" }).setLngLat([picked.lng, picked.lat]).addTo(m);
   }, [picked]);
 
+  // live "you are here" dot + accuracy halo
+  useEffect(() => {
+    const m = map.current; if (!m) return;
+    if (!me) { meMarker.current?.remove(); meMarker.current = null; return; }
+    if (!meMarker.current) meMarker.current = new maplibregl.Marker({ element: meEl() }).setLngLat([me.lng, me.lat]).addTo(m);
+    else meMarker.current.setLngLat([me.lng, me.lat]);
+    const halo = () => {
+      const data = circleGeo(me.lat, me.lng, Math.max(15, Math.min(me.accuracy ?? 30, 2000)));
+      const src = m.getSource("me-acc") as maplibregl.GeoJSONSource | undefined;
+      if (src) { src.setData(data); return; }
+      m.addSource("me-acc", { type: "geojson", data });
+      m.addLayer({ id: "me-acc-fill", type: "fill", source: "me-acc", paint: { "fill-color": ME_BLUE, "fill-opacity": 0.12 } });
+      m.addLayer({ id: "me-acc-line", type: "line", source: "me-acc", paint: { "line-color": ME_BLUE, "line-opacity": 0.45, "line-width": 1.2 } });
+    };
+    if (m.isStyleLoaded()) halo(); else m.once("load", halo);
+    m.on("style.load", halo); // re-add if the basemap style is swapped (CARTO -> OpenFreeMap)
+    if (followMe && !flewToMe.current) { flewToMe.current = true; m.flyTo({ center: [me.lng, me.lat], zoom: 14.5, duration: 1200 }); }
+    return () => { m.off("style.load", halo); };
+  }, [me?.lat, me?.lng, me?.accuracy, followMe]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => { if (visible) map.current?.resize(); }, [visible]);
 
   return <div ref={ref} className={cn("absolute inset-0", !visible && "invisible")} />;
@@ -182,7 +233,8 @@ function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect,
 /* ----------------------------- SVG fallback map ----------------------------- */
 const W = 600, H = 680;
 
-function SvgMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked }: IncidentMapProps) {
+function SvgMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, me }: IncidentMapProps) {
+  const mp = me ? project(me.lat, me.lng, W, H) : null;
   const [hover, setHover] = useState<string | null>(null);
   const coast = useMemo(() => COAST.map(([la, ln]) => project(la, ln, W, H)), []);
   const coastPath = coast.map((p, i) => `${i ? "L" : "M"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
@@ -306,6 +358,14 @@ function SvgMap({ zones = [], shelters = [], teams = [], points = [], onSelect, 
           <circle r="16" fill="#dc2626" opacity="0.18" className={STATIC ? "" : "sos-ring"} />
           <path d="M0,0 C-9,-12 -11,-16 -11,-21 A11,11 0 1 1 11,-21 C11,-16 9,-12 0,0Z" fill="#dc2626" stroke="white" strokeWidth="2" />
           <circle cy="-21" r="4" fill="white" />
+        </g>
+      )}
+      {mp && (
+        <g transform={`translate(${mp.x},${mp.y})`}>
+          <circle r="22" fill={ME_BLUE} opacity="0.14" />
+          <circle r="11" fill="none" stroke={ME_BLUE} strokeWidth="2" opacity="0.6" className={STATIC ? "" : "sos-ring"} />
+          <circle r="8" fill={ME_BLUE} stroke="white" strokeWidth="3" />
+          <text y="-16" textAnchor="middle" style={{ font: "700 11px Inter Variable" }} fill={ME_BLUE}>You</text>
         </g>
       )}
       <text x="10" y={H - 6} style={{ font: "500 10px Inter Variable" }} fill="var(--muted)">Schematic map · Chennai (offline fallback)</text>

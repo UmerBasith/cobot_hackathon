@@ -1,9 +1,13 @@
 /** /responder — field team portal: dark navy sidebar (desktop), phone layout + bottom tab bar (mobile). */
+import { BrandMark } from "@/sections/Logo";
+import { logout } from "@/lib/auth";
+
+const signOut = () => { logout("responder"); window.location.assign("/responder/login"); };
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   Bell, BarChart3, Boxes, CheckCircle2, ChevronDown, ClipboardList, Clock, Info, LayoutDashboard, MapPin,
-  MoreHorizontal, Navigation, Phone, RefreshCw, Settings, ShieldAlert, Siren, Truck, Users, Wrench, X,
+  LogOut, MoreHorizontal, Navigation, Phone, RefreshCw, Settings, ShieldAlert, Siren, Truck, Users, Wrench, X,
 } from "lucide-react";
 import { Button, Card, EmptyState, Skeleton, Textarea, useToast } from "@/ui";
 import { CATEGORY_META, CategoryIcon, ReasonsList } from "@/sections/IncidentUI";
@@ -49,7 +53,7 @@ export default function Responder() {
       {/* Sidebar (desktop) */}
       <aside className="fixed inset-y-0 left-0 z-40 hidden w-60 flex-col bg-[#0b1736] text-slate-300 lg:flex">
         <div className="flex items-center gap-3 px-5 py-5">
-          <span className="grid size-10 place-items-center rounded-xl bg-red-600 text-white shadow-lg shadow-red-900/40"><Siren className="size-5" /></span>
+          <BrandMark tile className="size-10" />
           <div className="leading-tight"><p className="font-display text-lg font-bold text-white">ResQNet</p><p className="text-[11px] text-slate-400">Citizen Emergency Platform</p></div>
         </div>
         <nav className="mt-2 flex-1 space-y-1 px-3 text-sm">
@@ -60,8 +64,9 @@ export default function Responder() {
           <SideItem icon={BarChart3} label="Reports" onClick={() => scrollTo("r-details")} />
           <SideItem icon={Boxes} label="Resources" onClick={() => scrollTo("r-team")} />
           <SideItem icon={Settings} label="Settings" onClick={() => scrollTo("r-actions")} />
+          <SideItem icon={LogOut} label="Log out" onClick={signOut} />
         </nav>
-        <Link to="/app" className="mx-3 mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 hover:bg-white/5 hover:text-white"><LayoutDashboard className="size-3.5" />Open control room</Link>
+        <Link to="/admin" className="mx-3 mb-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs text-slate-400 hover:bg-white/5 hover:text-white"><LayoutDashboard className="size-3.5" />Open control room</Link>
         <div className="border-t border-white/10 px-5 py-4 text-xs">
           <p className="flex items-center gap-2 font-medium text-emerald-400"><span className="size-2 animate-pulse rounded-full bg-emerald-400" />Connected</p>
           <p className="mt-0.5 text-slate-400">Last sync {at ? fmtTime(at) : "—"}</p>
@@ -72,11 +77,12 @@ export default function Responder() {
         {/* Top bar */}
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur dark:border-line dark:bg-surface/95">
           <div className="flex h-16 items-center gap-2 px-4 lg:px-6">
-            <span className="grid size-9 place-items-center rounded-xl bg-red-600 text-white lg:hidden"><Siren className="size-4" /></span>
+            <BrandMark tile className="size-9 p-1 lg:hidden" />
             <span className="hidden rounded-full bg-red-50 px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200 sm:inline-flex dark:bg-red-950/40 dark:text-red-300 dark:ring-red-900">Responder Portal</span>
             <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:ring-emerald-900"><span className="size-1.5 animate-pulse rounded-full bg-emerald-500" />On Duty</span>
             <span className="hidden items-center gap-1 text-xs text-slate-500 md:inline-flex"><MapPin className="size-3.5 text-red-600" />Chennai</span>
             <div className="ml-auto flex items-center gap-2">
+              <button onClick={signOut} className="grid size-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100 lg:hidden dark:hover:bg-surface-2" aria-label="Log out" title="Log out"><LogOut className="size-5" /></button>
               <button onClick={() => scrollTo("r-timeline")} className="relative grid size-9 place-items-center rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-surface-2" aria-label="Alerts">
                 <Bell className="size-5" />{alertCount > 0 && <span className="absolute -top-0.5 -right-0.5 grid size-4 place-items-center rounded-full bg-red-600 text-[10px] font-bold text-white">{alertCount}</span>}
               </button>
@@ -229,7 +235,7 @@ function CurrentJob({ job, team, onChange, compact }: { job: ResponderJob; team?
         <div className="grid grid-cols-3 gap-2">
           {nav ? <a href={nav} target="_blank" rel="noreferrer"><Button icon={Navigation} className="w-full bg-red-600 shadow-none hover:bg-red-500">Navigate</Button></a>
             : <Button icon={Navigation} disabled className="w-full">Navigate</Button>}
-          <Link to={`/app/incidents/${encodeURIComponent(i.id)}`}><Button variant="outline" icon={Info} className="w-full"><span className="sm:hidden">Details</span><span className="hidden sm:inline">View Details</span></Button></Link>
+          <Link to={`/admin/incidents/${encodeURIComponent(i.id)}`}><Button variant="outline" icon={Info} className="w-full"><span className="sm:hidden">Details</span><span className="hidden sm:inline">View Details</span></Button></Link>
           <a href="tel:112"><Button variant="outline" icon={Phone} className="w-full"><span className="sm:hidden">Control</span><span className="hidden sm:inline">Contact Control</span></Button></a>
         </div>
       </div>

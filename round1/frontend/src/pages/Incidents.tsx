@@ -51,7 +51,7 @@ export default function Incidents() {
       <PageIntro title="All incidents" text="Ranked by priority: open first, then Critical → Low, then score, then oldest."
         actions={<>
           <Button variant="outline" icon={RefreshCw} onClick={reload}>Refresh</Button>
-          <Link to="/app/report"><Button icon={Plus}>New report</Button></Link>
+          <Link to="/admin/report"><Button icon={Plus}>New report</Button></Link>
         </>} />
 
       <Card className="mb-4 p-3">
@@ -92,7 +92,7 @@ export default function Incidents() {
                   const crit = i.severity === "Critical" && i.status !== "Resolved";
                   const st = overrides[i.id] ?? i.status;
                   return (
-                    <tr key={i.id} onClick={() => nav(`/app/incidents/${i.id}`)}
+                    <tr key={i.id} onClick={() => nav(`/admin/incidents/${i.id}`)}
                       className={cn("cursor-pointer transition-colors", crit ? "row-critical bg-red-50/70 hover:bg-red-100/70 dark:bg-red-950/30 dark:hover:bg-red-950/50" : "bg-surface hover:bg-surface-2/60", i.status === "Resolved" && "opacity-70")}>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">

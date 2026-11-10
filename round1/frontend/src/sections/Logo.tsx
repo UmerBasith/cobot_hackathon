@@ -1,15 +1,20 @@
 import { Link } from "react-router-dom";
-import { product } from "@/config";
+import { cn } from "@/lib/cn";
+
+/** The ResQNet "R+" brand mark (public/images/logo-mark.png, transparent background). */
+export function BrandMark({ className, tile = false }: { className?: string; tile?: boolean }) {
+  const img = <img src="/images/logo-mark.png" alt="ResQNet" className={cn("h-9 w-auto select-none", !tile && className)} draggable={false} />;
+  // On dark backgrounds put the mark on a white tile so its navy half stays visible.
+  return tile ? <span className={cn("grid place-items-center rounded-xl bg-white p-1.5 shadow-lg", className)}>{img}</span> : img;
+}
+
+export const NAVY = "#1b2a4e";
 
 export function Logo() {
   return (
-    <Link to="/" className="flex items-center gap-2.5 font-display text-lg font-semibold">
-      <span className="grid size-8 place-items-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-glow">
-        <svg viewBox="0 0 24 24" className="size-[18px]" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z" /><path d="M12 8.5v7M8.5 12h7" />
-        </svg>
-      </span>
-      <span>ResQ<span className="text-brand-600 dark:text-brand-400">Net</span></span>
+    <Link to="/" className="flex items-center gap-2.5 font-display text-lg font-bold" style={{ color: NAVY }}>
+      <BrandMark className="h-8" />
+      ResQNet
     </Link>
   );
 }

@@ -104,8 +104,14 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
   const [params] = useSearchParams();
   const qCat = params.get("category") as Category | null;
   const initCat = qCat && qCat in CATEGORY_META ? qCat : null;
+  // "Report from here" on the citizen home passes the live GPS position: /report?lat=..&lng=..&area=..
+  const qLat = parseFloat(params.get("lat") ?? ""), qLng = parseFloat(params.get("lng") ?? "");
+  const qArea = params.get("area");
+  const base: ReportIn = Number.isFinite(qLat) && Number.isFinite(qLng)
+    ? { ...empty, lat: +qLat.toFixed(5), lng: +qLng.toFixed(5), area: qArea ?? empty.area }
+    : empty;
 
-  const [f, setF] = useState<ReportIn>(STATIC ? demo : initCat ? { ...empty, category: initCat } : empty);
+  const [f, setF] = useState<ReportIn>(STATIC ? demo : initCat ? { ...base, category: initCat } : base);
   const [picked, setPicked] = useState(!!STATIC || !!initCat);
   const [extras, setExtras] = useState(!!STATIC);
   const [titleTouched, setTitleTouched] = useState(false);
@@ -672,7 +678,7 @@ function Result({ inc, local, admin, onNew }: { inc: Incident; local: boolean; a
               <Plus className="size-4" />Report another
             </button>
             {admin && (
-              <Link to={local ? "/app" : `/app/incidents/${inc.id}`} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white font-semibold text-[#1e63d6] hover:bg-slate-50 sm:col-span-2">
+              <Link to={local ? "/admin" : `/admin/incidents/${inc.id}`} className="flex h-12 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white font-semibold text-[#1e63d6] hover:bg-slate-50 sm:col-span-2">
                 <LayoutDashboard className="size-4" />{local ? "Control room" : "Open incident"}
               </Link>
             )}

@@ -92,9 +92,9 @@ export default function Teams() {
         <div className="mt-4 grid gap-4 xl:grid-cols-3">
           <Card className="min-w-0 xl:col-span-2">
             <CardHeader title="Live Map" subtitle="Teams (diamonds) and open incidents (dots)" icon={MapIcon}
-              action={<div className="flex gap-1.5"><Badge tone="brand">Live Map</Badge><Link to="/app/zones"><Badge tone="gray">Zones</Badge></Link></div>} />
+              action={<div className="flex gap-1.5"><Badge tone="brand">Live Map</Badge><Link to="/admin/zones"><Badge tone="gray">Zones</Badge></Link></div>} />
             <CardBody>
-              <LazyMap height={400} points={points} teams={tpoints} onSelect={(id) => nav(`/app/incidents/${id}`)} />
+              <LazyMap height={400} points={points} teams={tpoints} onSelect={(id) => nav(`/admin/incidents/${id}`)} />
               <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted">
                 <span className="flex items-center gap-1"><span className="size-2.5 rotate-45 rounded-[2px] bg-[#2563eb]" />Available</span>
                 <span className="flex items-center gap-1"><span className="size-2.5 rotate-45 rounded-[2px] bg-[#7c3aed]" />Deployed</span>
@@ -111,7 +111,7 @@ export default function Teams() {
               {!list ? <Skeleton className="h-60" /> : open.length === 0 ? <p className="text-sm text-muted">No open incidents.</p> : open.slice(0, 12).map((i) => {
                 const eta = etaFor(i);
                 return (
-                  <Link key={i.id} to={`/app/incidents/${i.id}`} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5 hover:bg-surface-2/60">
+                  <Link key={i.id} to={`/admin/incidents/${i.id}`} className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5 hover:bg-surface-2/60">
                     <Badge tone={P_TONE[i.severity]}>{P_OF[i.severity]}</Badge>
                     <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{i.title}</p><p className="truncate text-xs text-muted">{i.id} · {i.area}</p></div>
                     <span className="whitespace-nowrap text-xs text-muted">{eta != null ? `ETA ${eta} min` : "unassigned"}</span>
@@ -146,7 +146,7 @@ export default function Teams() {
               </div>
               <div className="flex gap-2">
                 <Button className="flex-1" icon={Send} onClick={dispatch} disabled={busy}>{busy ? "Dispatching…" : "Dispatch Team"}</Button>
-                <Button variant="outline" icon={Repeat} onClick={() => selInc && nav(`/app/incidents/${selInc}`)}>Reassign</Button>
+                <Button variant="outline" icon={Repeat} onClick={() => selInc && nav(`/admin/incidents/${selInc}`)}>Reassign</Button>
               </div>
             </CardBody>
           </Card>
@@ -154,7 +154,7 @@ export default function Teams() {
           <Card className="min-w-0 xl:col-span-2">
             <CardHeader title="Response Teams Overview" subtitle="Click a team for details" icon={Users} />
             <CardBody>
-              {!teams ? <Skeleton className="h-60" /> : <TeamTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/app/teams/${id}`)} />}
+              {!teams ? <Skeleton className="h-60" /> : <TeamTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/admin/teams/${id}`)} />}
             </CardBody>
           </Card>
 
@@ -175,8 +175,8 @@ export default function Teams() {
             <CardBody className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <Button icon={Send} onClick={dispatch}>Dispatch Team</Button>
               <a href="tel:112"><Button className="w-full" variant="outline" icon={Phone}>Call Team</Button></a>
-              <Button variant="outline" icon={Repeat} onClick={() => selInc && nav(`/app/incidents/${selInc}`)}>Reassign</Button>
-              <Link to="/app/alerts"><Button className="w-full" variant="outline" icon={Bell}>Broadcast Alert</Button></Link>
+              <Button variant="outline" icon={Repeat} onClick={() => selInc && nav(`/admin/incidents/${selInc}`)}>Reassign</Button>
+              <Link to="/admin/alerts"><Button className="w-full" variant="outline" icon={Bell}>Broadcast Alert</Button></Link>
             </CardBody>
           </Card>
         </div>
@@ -184,7 +184,7 @@ export default function Teams() {
 
       {tab === "teams" && (
         <Card className="mt-4"><CardHeader title="All teams" subtitle="Click a team for details" icon={Users} />
-          <CardBody>{!teams ? <Skeleton className="h-60" /> : <TeamTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/app/teams/${id}`)} />}</CardBody></Card>
+          <CardBody>{!teams ? <Skeleton className="h-60" /> : <TeamTable teams={teams} eta={etaByTeam} onOpen={(id) => nav(`/admin/teams/${id}`)} />}</CardBody></Card>
       )}
 
       {tab !== "live" && tab !== "teams" && (
@@ -192,7 +192,7 @@ export default function Teams() {
           <CardHeader title={{ personnel: "Personnel", vehicles: "Vehicles", equipment: "Equipment", schedules: "Schedules" }[tab]} subtitle="demo data" icon={Users} />
           <CardBody className="divide-y divide-line">
             {(teams ?? []).slice(0, 8).map((t, k) => (
-              <button key={t.id} onClick={() => nav(`/app/teams/${t.id}`)} className="flex w-full items-center justify-between gap-3 py-2.5 text-left text-sm hover:text-brand-600">
+              <button key={t.id} onClick={() => nav(`/admin/teams/${t.id}`)} className="flex w-full items-center justify-between gap-3 py-2.5 text-left text-sm hover:text-brand-600">
                 <span className="flex items-center gap-2.5"><TeamIcon type={t.type} />{t.name}</span>
                 <span className="text-muted">{tab === "personnel" ? `${5 + (k % 4)}/8 on duty` : tab === "vehicles" ? `TN-0${(k % 9) + 1}-G-${4100 + k * 37}` : tab === "equipment" ? `${92 - (k % 5) * 3}% serviceable` : k % 2 ? "Shift B · 14:00–22:00" : "Shift A · 06:00–14:00"}</span>
               </button>

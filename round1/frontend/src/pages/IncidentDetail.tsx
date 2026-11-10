@@ -72,7 +72,7 @@ export default function IncidentDetail() {
   }, [teams]);
 
   if (inc === null && all) {
-    return <EmptyState icon={FileText} title={`Incident ${id} not found`} text="It may have been deleted." action={<Link to="/app/incidents"><Button variant="outline" icon={ArrowLeft}>Back to incidents</Button></Link>} />;
+    return <EmptyState icon={FileText} title={`Incident ${id} not found`} text="It may have been deleted." action={<Link to="/admin/incidents"><Button variant="outline" icon={ArrowLeft}>Back to incidents</Button></Link>} />;
   }
   if (!inc) return <div className="space-y-4"><Skeleton className="h-28 rounded-2xl" /><div className="grid gap-4 lg:grid-cols-3"><Skeleton className="h-96 lg:col-span-2" /><Skeleton className="h-96" /></div></div>;
 
@@ -114,7 +114,7 @@ export default function IncidentDetail() {
   }
   async function doDelete() {
     setBusy("del");
-    try { await deleteIncident(inc!.id); toast("success", `${inc!.id} deleted`); nav("/app/incidents"); }
+    try { await deleteIncident(inc!.id); toast("success", `${inc!.id} deleted`); nav("/admin/incidents"); }
     catch (e) { toast("error", "Could not delete", errText(e)); setBusy(null); }
   }
 
@@ -159,7 +159,7 @@ export default function IncidentDetail() {
   return (
     <div className="pb-24 lg:pb-0">
       <nav className="mb-3 flex items-center gap-1.5 text-sm text-muted">
-        <Link to="/app/incidents" className="hover:text-fg">Incidents</Link><ChevronRight className="size-3.5" /><span className="font-medium text-fg">{inc.id}</span>
+        <Link to="/admin/incidents" className="hover:text-fg">Incidents</Link><ChevronRight className="size-3.5" /><span className="font-medium text-fg">{inc.id}</span>
       </nav>
 
       {/* Header */}

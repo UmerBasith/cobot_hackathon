@@ -92,17 +92,18 @@ export const CardBody = ({ className, ...rest }: HTMLAttributes<HTMLDivElement>)
 );
 
 /* ----------------------------------- Badge --------------------------------- */
-type Tone = "brand" | "green" | "amber" | "red" | "gray" | "blue";
+type Tone = "brand" | "green" | "amber" | "red" | "gray" | "blue" | "indigo";
 const tones: Record<Tone, string> = {
   brand: "bg-brand-50 text-brand-700 ring-brand-200 dark:bg-brand-900/40 dark:text-brand-200 dark:ring-brand-800",
   green: "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-900",
   amber: "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:ring-amber-900",
   red: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950 dark:text-red-300 dark:ring-red-900",
   blue: "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:ring-sky-900",
+  indigo: "bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:ring-indigo-900",
   gray: "bg-surface-2 text-muted ring-line",
 };
 const dotTones: Record<Tone, string> = {
-  brand: "bg-brand-500", green: "bg-emerald-500", amber: "bg-amber-500", red: "bg-red-500", blue: "bg-sky-500", gray: "bg-muted",
+  brand: "bg-brand-500", green: "bg-emerald-500", amber: "bg-amber-500", red: "bg-red-500", blue: "bg-sky-500", indigo: "bg-indigo-500", gray: "bg-muted",
 };
 
 export function Badge({ tone = "brand", dot, pulse, className, children }: {

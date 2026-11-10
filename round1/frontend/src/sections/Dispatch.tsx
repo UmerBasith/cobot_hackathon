@@ -1,10 +1,10 @@
 /** Round 2: Dispatch card (suggest → assign), assignments list, possible duplicates. */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Ambulance, Anchor, Check, Copy, Flame, Link2, Shield, Timer, Truck, Users, type LucideIcon } from "lucide-react";
+import { Ambulance, Anchor, Check, Copy, Crosshair, Flame, Link2, Shield, Timer, Truck, Users, type LucideIcon } from "lucide-react";
 import { Badge, Button, Card, CardBody, CardHeader, Skeleton, useToast } from "@/ui";
 import { cn } from "@/lib/cn";
-import { assignTeams, errText, getSimilar, getSuggest, markDuplicate } from "@/lib/resq";
+import { assignTeams, autoAssign, errText, getSimilar, getSuggest, markDuplicate } from "@/lib/resq";
 import type { AssignmentStatus, Incident, Similar, SuggestSlot, TeamType } from "@/lib/mock";
 import { SeverityBadge } from "./IncidentUI";
 
@@ -30,6 +30,31 @@ const SLOT_TYPES: Record<string, TeamType[]> = {
   Police: ["police"], "NDRF rescue": ["ndrf", "fire"],
 };
 
+/** Official Round 2 "Location-based assignment": one click → nearest available suitable team for every need. */
+export function AutoAssignButton({ inc, onDone, className }: { inc: Incident; onDone: () => void; className?: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  if (inc.status === "Resolved") return null;
+  async function run() {
+    setBusy(true);
+    const before = new Set(inc.assignments.map((a) => a.id));
+    try {
+      const out = await autoAssign(inc.id);
+      const added = out.assignments.filter((a) => !before.has(a.id));
+      toast("success", added.length ? `Auto-assigned ${added.length} nearest team${added.length > 1 ? "s" : ""}` : "Nearest teams already assigned",
+        added.map((a) => `${a.team_name} · ${a.distance_km} km · ETA ${Math.round(a.eta_min)} min`).join("  |  ") || `${inc.id} is covered`);
+      onDone();
+    } catch (e) { toast("error", "Auto-assign failed", errText(e)); }
+    finally { setBusy(false); }
+  }
+  return (
+    <Button icon={Crosshair} loading={busy} onClick={run}
+      className={cn("w-full bg-red-600 text-white shadow-[0_8px_24px_-10px_rgb(220_38_38/0.8)] hover:bg-red-500", className)}>
+      Auto-assign nearest suitable team
+    </Button>
+  );
+}
+
 export function DispatchCard({ inc, onChange }: { inc: Incident; onChange: () => void }) {
   const toast = useToast();
   const [slots, setSlots] = useState<SuggestSlot[] | null>(null);
@@ -42,7 +67,7 @@ export function DispatchCard({ inc, onChange }: { inc: Incident; onChange: () =>
   async function assign(ids: string[], key: string) {
     if (!ids.length) return;
     setBusy(key);
-    try { await assignTeams(inc.id, ids); toast("success", `Dispatched ${ids.length} team${ids.length > 1 ? "s" : ""}`, `${inc.id} → In Progress`); onChange(); }
+    try { await assignTeams(inc.id, ids); toast("success", `Dispatched ${ids.length} team${ids.length > 1 ? "s" : ""}`, `${inc.id} → Assigned`); onChange(); }
     catch (e) { toast("error", "Could not assign", errText(e)); }
     finally { setBusy(null); }
   }
@@ -62,6 +87,8 @@ export function DispatchCard({ inc, onChange }: { inc: Incident; onChange: () =>
       <CardBody className="space-y-4">
         {!resolved && (
           <>
+            <AutoAssignButton inc={inc} onDone={onChange} />
+            <p className="-mt-2 text-center text-[11px] text-muted">Location-based: nearest available team of the right type, by distance (km) and ETA</p>
             {!slots ? <Skeleton className="h-28" /> : slots.length === 0 ? <p className="text-sm text-muted">No suggestion for this category.</p> : (
               <div className="space-y-3">
                 {slots.map((s) => { const cov = coveredBy(s); return cov ? (

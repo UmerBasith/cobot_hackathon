@@ -3,22 +3,25 @@ import type { ReactNode } from "react";
 import { Activity, BarChart3, CheckCircle2, Gauge, LayoutGrid, MapPin, PieChart, RefreshCw, Timer, Truck, Zap, type LucideIcon } from "lucide-react";
 import { AreaChartBox, Badge, BarChartBox, Button, Card, CardBody, CardHeader, ChartLegend, DonutChartBox, ProgressBar, Skeleton } from "@/ui";
 import { PageIntro } from "@/sections/AppShell";
-import { CATEGORY_META, CategoryIcon, SEV_HEX } from "@/sections/IncidentUI";
-import { getAnalytics } from "@/lib/resq";
+import { CATEGORY_META, CategoryIcon, SEV_HEX, STATUS_HEX } from "@/sections/IncidentUI";
+import { OfficialStats } from "@/sections/OfficialStats";
+import { getAnalytics, getStats } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
-import type { Analytics as A } from "@/lib/mock";
+import type { Analytics as A, Stats } from "@/lib/mock";
 
-const STATUS_HEX = { Reported: "#94a3b8", Pending: "#f59e0b", "In Progress": "#0ea5e9", Resolved: "#10b981" } as const;
 const mins = (v: number | null) => (v == null ? "—" : v < 60 ? `${v.toFixed(1)} min` : `${(v / 60).toFixed(1)} h`);
 
 export default function Analytics() {
-  const [a, reload, at] = usePoll<A>(getAnalytics, 10000);
+  const [a, reloadA, at] = usePoll<A>(getAnalytics, 10000);
+  const [stats, reloadS] = usePoll<Stats>(getStats, 10000);
+  const reload = () => { reloadA(); reloadS(); };
   return (
     <>
       <PageIntro title="Analytics & performance" text={`How fast we respond, where incidents happen, how teams perform · measured from demo data${at ? ` · ${fmtTime(at)}` : ""}`}
         actions={<Button variant="outline" icon={RefreshCw} onClick={reload}>Refresh</Button>} />
+      <OfficialStats stats={stats} className="mb-4" />
       {!a ? <Loading /> : (<>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Kpi icon={CheckCircle2} label="Resolution rate" value={`${a.resolution_rate}%`} sub={`${a.resolved} of ${a.total} resolved · ${a.open} open`} tone="green" bar={a.resolution_rate} />
@@ -54,7 +57,7 @@ export default function Analytics() {
             </CardBody>
           </Card>
           <Card className="min-w-0">
-            <CardHeader title="By category" subtitle="Count and average severity score" icon={LayoutGrid} />
+            <CardHeader title="Incident distribution by category" subtitle="Count and average severity score" icon={LayoutGrid} />
             <CardBody className="space-y-2.5">
               {[...a.by_category].sort((x, y) => y.total - x.total).map((c) => {
                 const max = Math.max(1, ...a.by_category.map((x) => x.total));

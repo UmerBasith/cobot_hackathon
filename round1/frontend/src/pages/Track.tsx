@@ -16,7 +16,7 @@ import type { Severity, TrackOut } from "@/lib/mock";
 type T = TrackOut & { lat?: number; lng?: number };
 const P: Record<Severity, string> = { Critical: "P1 – Critical", High: "P2 – High", Medium: "P3 – Medium", Low: "P4 – Low" };
 const PCLS: Record<Severity, string> = { Critical: "bg-red-600 text-white", High: "bg-orange-500 text-white", Medium: "bg-amber-400 text-amber-950", Low: "bg-emerald-600 text-white" };
-const STEPS = ["Reported", "Verified", "Assigned", "En Route", "On Scene", "Resolved"] as const;
+const STEPS = ["Reported", "Verified", "Assigned", "In Progress", "On Scene", "Resolved"] as const;
 
 export default function Track() {
   const { id } = useParams();
@@ -76,8 +76,9 @@ function stepIndex(t: T) {
   const s = t.teams.filter((x) => x.status !== "rejected").map((x) => x.status);
   if (s.includes("on_scene") || s.includes("completed")) return 4;
   if (s.includes("en_route") || s.includes("accepted")) return 3;
-  if (s.length) return 2;
-  if (t.status === "Pending" || t.status === "In Progress") return 1;
+  if (t.status === "In Progress") return 3;
+  if (s.length || t.status === "Assigned") return 2;
+  if (t.status === "Pending") return 1;
   return 0;
 }
 
@@ -100,7 +101,7 @@ function Tracker({ id }: { id: string }) {
   const lead = active[0];
   const geo = t.lat != null && t.lng != null ? { lat: t.lat, lng: t.lng } : areaByName(t.area) ?? { lat: 13.08, lng: 80.27 };
   const firstAt = (s: string) => t.timeline.find((e) => e.status === s)?.at;
-  const stepTime: (string | undefined)[] = [t.created_at, firstAt("Pending"), idx >= 2 ? firstAt("In Progress") ?? t.updated_at : undefined, idx >= 3 ? firstAt("In Progress") ?? t.updated_at : undefined, idx >= 4 ? t.updated_at : undefined, firstAt("Resolved")];
+  const stepTime: (string | undefined)[] = [t.created_at, firstAt("Pending"), idx >= 2 ? firstAt("Assigned") ?? firstAt("In Progress") ?? t.updated_at : undefined, idx >= 3 ? firstAt("In Progress") ?? t.updated_at : undefined, idx >= 4 ? t.updated_at : undefined, firstAt("Resolved")];
   const card = "rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900";
 
   return (
@@ -135,7 +136,7 @@ function Tracker({ id }: { id: string }) {
                     <p className={cn("text-sm font-semibold", cur ? "text-blue-700 dark:text-blue-300" : doneStep ? "" : "text-slate-400")}>{s}</p>
                     <p className="text-xs text-slate-500">
                       {stepTime[k] && (doneStep || cur) ? fmtTime(stepTime[k]!) : cur ? "Now" : "—"}
-                      {s === "En Route" && cur && lead ? ` · ETA ${Math.round(lead.eta_min)} min` : ""}
+                      {s === "In Progress" && cur && lead ? ` · ETA ${Math.round(lead.eta_min)} min` : ""}
                     </p>
                   </div>
                 </li>

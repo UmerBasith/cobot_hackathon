@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Filter, Inbox, Plus, RefreshCw, Search, Trash2, Users } from "lucide-react";
 import { Button, Card, EmptyState, Input, Modal, Select, Skeleton, useToast } from "@/ui";
 import { PageIntro } from "@/sections/AppShell";
-import { CATEGORIES, CATEGORY_META, CategoryIcon, SeverityBadge, STATUS_TONE } from "@/sections/IncidentUI";
+import { CATEGORIES, CATEGORY_META, CategoryIcon, PriorityChip, RankExplainer, SeverityBadge, STATUS_TONE } from "@/sections/IncidentUI";
 import { deleteIncident, getIncidents, timeAgo, updateStatus } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { cn } from "@/lib/cn";
@@ -11,7 +11,7 @@ import { SEVERITIES, STATUSES, type Incident, type Status } from "@/lib/mock";
 
 const statusSelect: Record<string, string> = {
   gray: "bg-surface-2 text-fg", amber: "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
-  blue: "bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-200", green: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
+  blue: "bg-sky-50 text-sky-800 dark:bg-sky-950 dark:text-sky-200", indigo: "bg-indigo-50 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200", green: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200",
 };
 
 export default function Incidents() {
@@ -48,12 +48,13 @@ export default function Incidents() {
   const filtered = q || status || sev || cat;
   return (
     <>
-      <PageIntro title="All incidents" text="Ranked by priority: open first, then Critical → Low, then score, then oldest."
+      <PageIntro title="All incidents" text="Intelligent prioritisation: open first, then Critical → Low, then priority score (severity + time waiting)."
         actions={<>
           <Button variant="outline" icon={RefreshCw} onClick={reload}>Refresh</Button>
           <Link to="/admin/report"><Button icon={Plus}>New report</Button></Link>
         </>} />
 
+      <RankExplainer className="-mt-2 mb-3" />
       <Card className="mb-4 p-3">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_170px_170px_200px_auto]">
           <div className="relative">
@@ -75,12 +76,14 @@ export default function Incidents() {
           : rows.length === 0 ? <div className="p-6"><EmptyState icon={Inbox} title="No incidents match" text="Try clearing the filters." /></div>
           : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[920px] text-sm">
+            <table className="w-full min-w-[1040px] text-sm">
               <thead className="bg-surface-2 text-left text-xs uppercase tracking-wide text-muted">
                 <tr>
+                  <th className="py-3 pl-4 font-medium">#</th>
                   <th className="px-4 py-3 font-medium">Incident</th>
                   <th className="px-4 py-3 font-medium">Area</th>
                   <th className="px-4 py-3 font-medium">Severity</th>
+                  <th className="px-4 py-3 font-medium">Priority</th>
                   <th className="px-4 py-3 text-right font-medium">People</th>
                   <th className="px-4 py-3 font-medium">Reported</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -88,12 +91,13 @@ export default function Incidents() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {rows.map((i) => {
+                {rows.map((i, rank) => {
                   const crit = i.severity === "Critical" && i.status !== "Resolved";
                   const st = overrides[i.id] ?? i.status;
                   return (
                     <tr key={i.id} onClick={() => nav(`/admin/incidents/${i.id}`)}
                       className={cn("cursor-pointer transition-colors", crit ? "row-critical bg-red-50/70 hover:bg-red-100/70 dark:bg-red-950/30 dark:hover:bg-red-950/50" : "bg-surface hover:bg-surface-2/60", i.status === "Resolved" && "opacity-70")}>
+                      <td className="py-3 pl-4 font-mono text-xs text-muted">{i.status === "Resolved" ? "—" : rank + 1}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-3">
                           <CategoryIcon category={i.category} />
@@ -105,6 +109,7 @@ export default function Incidents() {
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">{i.area}</td>
                       <td className="px-4 py-3"><SeverityBadge severity={i.severity} score={i.score} /></td>
+                      <td className="px-4 py-3"><PriorityChip inc={i} className="flex-col items-start gap-0.5" /></td>
                       <td className="px-4 py-3 text-right tabular-nums"><span className="inline-flex items-center gap-1"><Users className="size-3.5 text-muted" />{i.people_affected}</span></td>
                       <td className="px-4 py-3 whitespace-nowrap text-muted">{timeAgo(i.created_at)}</td>
                       <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>

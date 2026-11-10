@@ -3,7 +3,7 @@ import { api, withFallback } from "./api";
 import {
   mockAlerts, mockEscalations, mockSuggest, mockTeams, mockTrack, mockZones, mockShelters, mockAnalytics,
   type TrackOut, type Zone, type ZoneStatus, type Shelter, type Analytics,
-  type Alert, type AlertLevel, type Escalation, type ResponderJob, type Similar, type SuggestSlot, type Team,
+  type Alert, type AlertLevel, type TeamStatus, type TeamType, type Escalation, type ResponderJob, type Similar, type SuggestSlot, type Team,
   computeStats, localSeverity, mockIncidents, sortIncidents,
   type Incident, type ReportIn, type SeverityOut, type Stats, type Status,
 } from "./mock";
@@ -39,6 +39,25 @@ export const escalateAssignment = (id: string, reason: string, needs: NeedType[]
 export const createAlert = (a: { area: string; message: string; level: AlertLevel; hours: number }) => api.post<Alert>("/alerts", a);
 export const simulateFlood = () => api.post<{ ok: boolean; created: string[] }>("/simulate", { scenario: "chennai_flood" });
 export const resetDemo = () => api.post<{ ok: boolean; incidents: number }>("/reset");
+
+/* Round 2 official: team management, auto-assign, routes */
+export type TeamIn = { name: string; type: TeamType; station: string; lat?: number; lng?: number; crew?: number };
+export type TeamPatch = Partial<Pick<Team, "name" | "station" | "lat" | "lng" | "crew">> & { status?: TeamStatus };
+export const createTeam = (t: TeamIn) => api.post<Team>("/teams", t);
+export const patchTeam = (id: string, body: TeamPatch) => patch<Team>(`/teams/${enc(id)}`, body);
+export const deleteTeam = (id: string) => api.del<{ deleted: string }>(`/teams/${enc(id)}`);
+export const autoAssign = (id: string) => api.post<Incident>(`/incidents/${enc(id)}/auto-assign`, {});
+export interface RouteOut { source: string; distance_km: number; duration_min: number; coords: [number, number][] }
+const R_KM = (a: number, b: number, c: number, d: number) => {
+  const R = 6371, dLat = ((c - a) * Math.PI) / 180, dLng = ((d - b) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a * Math.PI) / 180) * Math.cos((c * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+};
+export const getRoute = (fromLat: number, fromLng: number, toLat: number, toLng: number) => {
+  const km = +(R_KM(fromLat, fromLng, toLat, toLng) * 1.3).toFixed(1);
+  return withFallback(api.get<RouteOut>(`/route?from_lat=${fromLat}&from_lng=${fromLng}&to_lat=${toLat}&to_lng=${toLng}`),
+    { source: "straight line (offline)", distance_km: km, duration_min: +(2 + (km / 25) * 60).toFixed(1), coords: [[fromLat, fromLng], [toLat, toLng]] } as RouteOut);
+};
 
 /* §11 */
 export const getTrack = (id: string): Promise<TrackOut | null> =>

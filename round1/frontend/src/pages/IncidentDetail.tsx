@@ -5,11 +5,12 @@ import {
   Navigation, ShieldAlert, Timer, Trash2, Truck, TrendingUp, Users, XCircle, Activity, Route,
 } from "lucide-react";
 import { Badge, Button, Card, CardBody, CardHeader, EmptyState, Input, Select, Skeleton, Tabs, useToast } from "@/ui";
-import { CATEGORY_META, SeverityBadge, StatusBadge } from "@/sections/IncidentUI";
+import { CATEGORY_META, RankExplainer, STATUS_DOT, SeverityBadge, StatusBadge } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
 import { HeroCard, SurvivalCard } from "@/sections/Survival";
 import { DeleteModal } from "./Incidents";
-import { ASG_META, DispatchCard, SimilarCard, TeamIcon } from "@/sections/Dispatch";
+import { ASG_META, AutoAssignButton, DispatchCard, SimilarCard, TeamIcon } from "@/sections/Dispatch";
+import { routeChip, toLines, useRoutes } from "@/lib/useRoutes";
 import { assignTeams, createAlert, deleteIncident, errText, getIncident, getIncidents, getSuggest, getTeams, markDuplicate, timeAgo, updateStatus } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { STATIC } from "@/lib/static";
@@ -17,7 +18,7 @@ import { fmtTime } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { STATUSES, type Incident, type Severity, type Status, type SuggestSlot, type Team } from "@/lib/mock";
 
-const ACTION: Record<Status, string> = { Reported: "Mark reported", Pending: "Verify → Pending", "In Progress": "Dispatch → In Progress", Resolved: "Resolve" };
+const ACTION: Record<Status, string> = { Reported: "Mark reported", Pending: "Verify → Pending", Assigned: "Team assigned → Assigned", "In Progress": "Team working → In Progress", Resolved: "Resolve" };
 const PRIO: Record<Severity, { p: string; label: string; sla: number; pill: string }> = {
   Critical: { p: "P1", label: "Critical", sla: 15, pill: "bg-red-600 text-white" },
   High: { p: "P2", label: "High", sla: 30, pill: "bg-orange-500 text-white" },
@@ -72,6 +73,11 @@ export default function IncidentDetail() {
     return [...g.values()];
   }, [teams]);
 
+  const activeAsg = (inc?.assignments ?? []).filter((a) => !["rejected", "completed"].includes(a.status));
+  const activeTeams = activeAsg.map((a) => (teams ?? []).find((t) => t.id === a.team_id)).filter((t): t is Team => !!t);
+  const routes = useRoutes(inc && inc.lat != null && inc.lng != null && inc.status !== "Resolved"
+    ? activeTeams.map((t) => ({ id: t.id, from: { lat: t.lat, lng: t.lng }, to: { lat: inc.lat!, lng: inc.lng! }, label: t.name })) : []);
+
   if (inc === null && all) {
     return <EmptyState icon={FileText} title={`Incident ${id} not found`} text="It may have been deleted." action={<Link to="/admin/incidents"><Button variant="outline" icon={ArrowLeft}>Back to incidents</Button></Link>} />;
   }
@@ -81,7 +87,6 @@ export default function IncidentDetail() {
   const overSla = elapsed.min >= pr.sla && inc.status !== "Resolved";
   const activeIds = inc.assignments.filter((a) => !["rejected", "completed"].includes(a.status)).map((a) => a.team_id);
   const first = inc.assignments.find((a) => !["rejected", "completed"].includes(a.status)) ?? inc.assignments[0];
-  const firstTeam = first ? (teams ?? []).find((t) => t.id === first.team_id) : undefined;
   const others = (all ?? []).filter((x) => x.id !== inc.id);
   const citizens = (inc.witnesses ?? 0) + 1;
   const tl = [...inc.timeline].reverse();
@@ -96,7 +101,7 @@ export default function IncidentDetail() {
     const free = ids.filter((x) => !activeIds.includes(x));
     if (!free.length) { toast("info", "Already assigned", "Selected teams are already on this incident"); return; }
     setBusy(key);
-    try { await assignTeams(inc!.id, free); toast("success", `Dispatched ${free.length} team${free.length > 1 ? "s" : ""}`, `${inc!.id} → In Progress`); await reload(); }
+    try { await assignTeams(inc!.id, free); toast("success", `Dispatched ${free.length} team${free.length > 1 ? "s" : ""}`, `${inc!.id} → Assigned`); await reload(); }
     catch (e) { toast("error", "Could not assign", errText(e)); }
     finally { setBusy(null); }
   }
@@ -126,15 +131,18 @@ export default function IncidentDetail() {
   const steps = [
     { label: "Reported", done: true, at: inc.created_at },
     { label: "Verified", done: idx >= 1, at: atOf("Pending"), pending: idx < 1 },
-    { label: "Assigned", done: inc.assignments.length > 0 || idx >= 2, at: inc.assignments[0]?.assigned_at ?? atOf("In Progress") },
-    { label: "En Route", done: !!has(["en_route", "on_scene", "completed"]) || idx >= 3, at: has(["en_route", "on_scene", "completed"])?.updated_at },
-    { label: "On Site", done: !!has(["on_scene", "completed"]) || idx >= 3, at: has(["on_scene", "completed"])?.updated_at },
+    { label: "Assigned", done: inc.assignments.length > 0 || idx >= 2, at: inc.assignments[0]?.assigned_at ?? atOf("Assigned") ?? atOf("In Progress") },
+    { label: "In Progress · En Route", done: !!has(["en_route", "on_scene", "completed"]) || idx >= 3, at: has(["en_route", "on_scene", "completed"])?.updated_at ?? atOf("In Progress") },
+    { label: "On Site", done: !!has(["on_scene", "completed"]) || idx >= 4, at: has(["on_scene", "completed"])?.updated_at },
     { label: "Resolved", done: inc.status === "Resolved", at: atOf("Resolved") },
   ];
   const cur = steps.findIndex((s) => !s.done);
 
   const mapPoints = inc.lat != null && inc.lng != null ? [{ id: inc.id, lat: inc.lat, lng: inc.lng, severity: inc.severity, title: inc.title, resolved: inc.status === "Resolved" }] : [];
-  const teamPts = firstTeam ? [{ id: firstTeam.id, lat: firstTeam.lat, lng: firstTeam.lng, label: firstTeam.name, status: firstTeam.status }] : [];
+  const teamPts = activeTeams.map((t) => ({ id: t.id, lat: t.lat, lng: t.lng, label: t.name, status: t.status }));
+  const prio = inc.priority_score ?? inc.score;
+  const bonus = +(prio - inc.score).toFixed(1);
+  const waited = inc.waiting_min ?? (Date.now() - new Date(inc.created_at).getTime()) / 60000;
   const maxPts = Math.max(1, ...inc.reasons.map((r) => Math.abs(r.points)));
 
   const quick = [
@@ -149,7 +157,7 @@ export default function IncidentDetail() {
     <ol className="relative space-y-4 border-l border-line pl-5">
       {items.map((t, k) => (
         <li key={k} className="relative">
-          <span className={cn("absolute -left-[26px] top-1 size-3 rounded-full ring-4 ring-surface", t.status === "Resolved" ? "bg-emerald-500" : t.status === "In Progress" ? "bg-sky-500" : t.status === "Pending" ? "bg-amber-500" : "bg-red-500")} />
+          <span className={cn("absolute -left-[26px] top-1 size-3 rounded-full ring-4 ring-surface", STATUS_DOT[t.status] ?? "bg-red-500")} />
           <div className="flex flex-wrap items-baseline gap-x-2"><p className="text-sm font-semibold">{t.status}</p><span className="text-xs text-muted">{fmtTime(t.at)} · {t.actor}</span></div>
           <p className="text-sm text-muted">{t.note}</p>
         </li>
@@ -185,8 +193,9 @@ export default function IncidentDetail() {
         <div className="grid grid-cols-3 gap-3 lg:contents">
           <Card className="rounded-2xl p-4 lg:w-48">
             <p className="text-xs font-medium text-muted">Priority Score</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums">{inc.score}<span className="text-sm font-medium text-muted"> / 100</span></p>
-            <div className="mt-2 h-2 rounded-full bg-surface-2"><div className="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style={{ width: `${Math.min(100, inc.score)}%` }} /></div>
+            <p className="mt-1 text-2xl font-bold tabular-nums">{prio.toFixed(1)}</p>
+            <p className="text-[11px] text-muted">severity {inc.score} + wait {bonus > 0 ? `+${bonus}` : "0"}</p>
+            <div className="mt-1.5 h-2 rounded-full bg-surface-2"><div className="h-2 rounded-full bg-gradient-to-r from-amber-400 to-orange-500" style={{ width: `${Math.min(100, prio)}%` }} /></div>
           </Card>
           <Card className="rounded-2xl p-4 lg:w-40">
             <p className="text-xs font-medium text-muted">SLA Target</p>
@@ -213,9 +222,13 @@ export default function IncidentDetail() {
           {/* Map */}
           <Card className="overflow-hidden rounded-2xl xl:col-span-2">
             <div className="relative">
-              {mapPoints.length ? <LazyMap height={390} points={mapPoints} teams={teamPts} /> : <div className="grid h-[390px] place-items-center bg-surface-2 text-sm text-muted"><MapPin className="mb-1 size-5" />Area: {inc.area}</div>}
+              {mapPoints.length ? <LazyMap height={390} points={mapPoints} teams={teamPts} routes={toLines(routes)} /> : <div className="grid h-[390px] place-items-center bg-surface-2 text-sm text-muted"><MapPin className="mb-1 size-5" />Area: {inc.area}</div>}
                             <div className="pointer-events-none absolute left-3 top-3 z-10 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-red-600 shadow ring-1 ring-red-100 dark:bg-neutral-900/90"><span className="size-2 animate-pulse rounded-full bg-red-500" />Live Route</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-red-600 shadow ring-1 ring-red-100 dark:bg-neutral-900/90"><span className="size-2 animate-pulse rounded-full bg-red-500" />Route &amp; location</span>
+                {routes.map((r) => (
+                  <span key={r.id} className="inline-flex max-w-full items-center gap-1.5 truncate rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow"><Route className="size-3.5 shrink-0" /><span className="truncate">{routes.length > 1 ? `${r.label} — ` : ""}{routeChip(r)}</span></span>
+                ))}
+                {!routes.length && inc.status !== "Resolved" && <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-xs font-medium text-muted shadow dark:bg-neutral-900/90">No team assigned — no route yet</span>}
               </div>
               {first && (
                 <div className="pointer-events-none absolute bottom-3 left-3 z-10 inline-flex items-center gap-2 rounded-xl bg-white/95 px-3 py-2 text-xs shadow-lg ring-1 ring-line dark:bg-neutral-900/90">
@@ -284,16 +297,27 @@ export default function IncidentDetail() {
                 </div>
               ))}
               <div className="mt-2 flex items-center justify-between rounded-xl border border-red-200 bg-red-50/70 p-3 dark:border-red-900 dark:bg-red-950/30">
-                <div><p className="text-xs text-muted">Total Score</p><p className="text-2xl font-bold tabular-nums">{inc.score}<span className="text-sm font-medium text-muted">/100</span></p></div>
+                <div><p className="text-xs text-muted">Severity score</p><p className="text-2xl font-bold tabular-nums">{inc.score}<span className="text-sm font-medium text-muted">/100</span></p></div>
                 <PrioPill sev={inc.severity} />
+              </div>
+              <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-3 dark:border-brand-800 dark:bg-brand-900/20">
+                <p className="text-xs font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-300">Priority ranking</p>
+                <div className="mt-2 space-y-1 font-mono text-sm tabular-nums">
+                  <div className="flex justify-between"><span className="font-sans text-muted">Severity score</span><span>{inc.score}</span></div>
+                  <div className="flex justify-between"><span className="font-sans text-muted">Time since report ({Math.round(waited)} min{inc.status === "Reported" || inc.status === "Pending" ? "" : ", stopped"})</span><span>+{Math.max(0, bonus)}</span></div>
+                  <div className="flex justify-between border-t border-brand-200 pt-1 font-bold dark:border-brand-800"><span className="font-sans">= Priority score</span><span>{prio.toFixed(1)}</span></div>
+                </div>
+                <p className="mt-2 text-[11px] text-muted">+1 per 2 min waiting while Reported/Pending (max +10), so nobody is forgotten in the queue.</p>
+                <RankExplainer className="mt-1" />
               </div>
             </CardBody>
           </Card>
 
           {/* Suggested teams */}
           <Card className="rounded-2xl">
-            <CardHeader title="Suggested Response Teams" subtitle="Nearest right team, by ETA" icon={Route} />
+            <CardHeader title="Suggested Response Teams" subtitle="Location-based · nearest suitable team, by distance + ETA" icon={Route} />
             <CardBody className="space-y-2">
+              <AutoAssignButton inc={inc} onDone={reload} />
               {!slots ? <Skeleton className="h-24" /> : slots.length === 0 ? <p className="text-sm text-muted">No suggestion for this category.</p> : slots.flatMap((s) => s.candidates.slice(0, 2).map((c) => {
                 const on = activeIds.includes(c.team.id); const chk = picked.includes(c.team.id);
                 return (
@@ -301,7 +325,7 @@ export default function IncidentDetail() {
                     <input type="checkbox" className="size-4 accent-red-600" checked={chk || on} disabled={on || inc.status === "Resolved"} onChange={() => setPicked((p) => chk ? p.filter((x) => x !== c.team.id) : [...p, c.team.id])} />
                     <TeamIcon type={c.team.type} />
                     <div className="min-w-0 flex-1"><p className="truncate text-sm font-medium">{c.team.name}</p><p className="text-xs text-muted">{s.slot}</p></div>
-                    {on ? <Badge tone="green"><Check className="size-3" />Assigned</Badge> : <span className="shrink-0 text-right text-xs"><span className="block font-semibold">{Math.round(c.eta_min)} min</span><span className="text-muted">{c.distance_km} km</span></span>}
+                    {on ? <Badge tone="green"><Check className="size-3" />Assigned</Badge> : <span className="shrink-0 text-right text-xs"><span className="block font-semibold">{c.distance_km} km</span><span className="text-muted">ETA {Math.round(c.eta_min)} min</span></span>}
                   </label>
                 );
               }))}

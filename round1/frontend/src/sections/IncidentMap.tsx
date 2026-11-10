@@ -23,8 +23,13 @@ const HOUSE = "M3 10.5L12 3l9 7.5V21h-6v-6H9v6H3z";
 export interface TeamPoint { id: string; lat: number; lng: number; label: string; status: "available" | "busy" | "offline" }
 const TEAM_HEX = { available: "#2563eb", busy: "#7c3aed", offline: "#94a3b8" };
 
+/** Team → incident route. coords are [lat, lng] pairs (as returned by GET /api/route). Dashed when label includes "straight". */
+export interface RouteLine { id: string; coords: [number, number][]; label?: string }
+const ROUTE_BLUE = "#2563eb";
+
 export interface IncidentMapProps {
   points?: MapPoint[];
+  routes?: RouteLine[];
   teams?: TeamPoint[];
   zones?: ZonePoint[];
   shelters?: ShelterPoint[];
@@ -136,9 +141,10 @@ function shelterEl(sh: ShelterPoint) {
   return el;
 }
 
-function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, me, followMe = true, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
+function LiveMap({ routes = [], zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, me, followMe = true, onMode, visible }: IncidentMapProps & { onMode: (m: "map" | "fallback") => void; visible: boolean }) {
   const meMarker = useRef<maplibregl.Marker | null>(null);
   const flewToMe = useRef(false);
+  const fitted = useRef(false);
   const ref = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markers = useRef<maplibregl.Marker[]>([]);
@@ -225,6 +231,37 @@ function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect,
     return () => { m.off("style.load", halo); };
   }, [me?.lat, me?.lng, me?.accuracy, followMe]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // team -> incident routes (GeoJSON line layers, solid = road, dashed = straight-line fallback)
+  const routeKey = JSON.stringify(routes.map((r) => [r.id, r.label, r.coords.length, r.coords[0], r.coords[r.coords.length - 1]]));
+  useEffect(() => {
+    const m = map.current; if (!m) return;
+    const fc = (dashed: boolean) => ({
+      type: "FeatureCollection" as const,
+      features: routes.filter((r) => r.coords.length >= 2 && /straight/i.test(r.label ?? "") === dashed).map((r) => ({
+        type: "Feature" as const, properties: { id: r.id }, geometry: { type: "LineString" as const, coordinates: r.coords.map(([la, ln]) => [ln, la]) },
+      })),
+    });
+    const draw = () => {
+      for (const [id, dashed] of [["routes-road", false], ["routes-straight", true]] as const) {
+        const src = m.getSource(id) as maplibregl.GeoJSONSource | undefined;
+        if (src) { src.setData(fc(dashed)); continue; }
+        m.addSource(id, { type: "geojson", data: fc(dashed) });
+        m.addLayer({ id: `${id}-casing`, type: "line", source: id, layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#ffffff", "line-width": 7, "line-opacity": 0.85 } });
+        m.addLayer({ id: `${id}-line`, type: "line", source: id, layout: { "line-cap": "round", "line-join": "round" },
+          paint: { "line-color": ROUTE_BLUE, "line-width": 4, ...(dashed ? { "line-dasharray": [2, 1.5] } : {}) } });
+      }
+      const all = routes.flatMap((r) => r.coords);
+      if (all.length >= 2 && !fitted.current) {
+        fitted.current = true;
+        const b = all.reduce((bb, [la, ln]) => bb.extend([ln, la]), new maplibregl.LngLatBounds([all[0][1], all[0][0]], [all[0][1], all[0][0]]));
+        m.fitBounds(b, { padding: 60, maxZoom: 14, duration: 800 });
+      }
+    };
+    if (m.isStyleLoaded()) draw(); else m.once("load", draw);
+    m.on("style.load", draw);
+    return () => { m.off("style.load", draw); };
+  }, [routeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => { if (visible) map.current?.resize(); }, [visible]);
 
   return <div ref={ref} className={cn("absolute inset-0", !visible && "invisible")} />;
@@ -233,7 +270,7 @@ function LiveMap({ zones = [], shelters = [], teams = [], points = [], onSelect,
 /* ----------------------------- SVG fallback map ----------------------------- */
 const W = 600, H = 680;
 
-function SvgMap({ zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, me }: IncidentMapProps) {
+function SvgMap({ routes = [], zones = [], shelters = [], teams = [], points = [], onSelect, onPick, picked, me }: IncidentMapProps) {
   const mp = me ? project(me.lat, me.lng, W, H) : null;
   const [hover, setHover] = useState<string | null>(null);
   const coast = useMemo(() => COAST.map(([la, ln]) => project(la, ln, W, H)), []);
@@ -310,6 +347,17 @@ function SvgMap({ zones = [], shelters = [], teams = [], points = [], onSelect, 
                 <text x="22" y="3" style={{ font: "600 11px Inter Variable" }} fill="var(--bg)">{sh.label} · {sh.pct}%</text>
               </g>
             )}
+          </g>
+        );
+      })}
+      {/* routes (team -> incident) */}
+      {routes.filter((r) => r.coords.length >= 2).map((r) => {
+        const d = r.coords.map(([la, ln], i) => { const q = project(la, ln, W, H); return `${i ? "L" : "M"}${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(" ");
+        const dashed = /straight/i.test(r.label ?? "");
+        return (
+          <g key={r.id} fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <path d={d} stroke="white" strokeWidth="7" opacity="0.85" />
+            <path d={d} stroke={ROUTE_BLUE} strokeWidth="4" strokeDasharray={dashed ? "9 6" : undefined} />
           </g>
         );
       })}

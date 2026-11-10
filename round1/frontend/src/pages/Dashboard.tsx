@@ -5,6 +5,8 @@ import { BarChartBox, Button, Card, CardBody, CardHeader, ChartLegend, DonutChar
 import { CATEGORIES, CATEGORY_META, CategoryIcon, SEV_HEX } from "@/sections/IncidentUI";
 import { LazyMap } from "@/sections/LazyMap";
 import { GoldenHourCard } from "@/sections/Survival";
+import { OfficialStats } from "@/sections/OfficialStats";
+import { RankExplainer } from "@/sections/IncidentUI";
 import { errText, getAnalytics, getEscalations, getIncidents, getStats, getTeams, getZones, resetDemo, simulateFlood } from "@/lib/resq";
 import { usePoll } from "@/lib/usePoll";
 import { cn } from "@/lib/cn";
@@ -100,7 +102,7 @@ export default function Dashboard() {
 
   const open = (list ?? []).filter((i) => i.status !== "Resolved");
   const p1 = open.filter((i) => i.severity === "Critical").length;
-  const queue = [...open].sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity) || b.score - a.score || a.created_at.localeCompare(b.created_at)).slice(0, 5);
+  const queue = [...open].sort((a, b) => SEV_ORDER.indexOf(a.severity) - SEV_ORDER.indexOf(b.severity) || (b.priority_score ?? b.score) - (a.priority_score ?? a.score) || a.created_at.localeCompare(b.created_at)).slice(0, 5);
   const ql = q.trim().toLowerCase();
   const points = (list ?? [])
     .filter((i) => i.lat != null && i.lng != null)
@@ -129,12 +131,14 @@ export default function Dashboard() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats && teams ? (<>
-          <Kpi icon={AlertOctagon} tone="red" label="Active Incidents" value={String(stats.total - stats.resolved)} sub={`${stats.pending} pending · ${stats.in_progress} in progress`} />
+          <Kpi icon={AlertOctagon} tone="red" label="Active Incidents" value={String(stats.total - stats.resolved)} sub={`${stats.pending} pending · ${stats.assigned ?? 0} assigned · ${stats.in_progress} in progress`} />
           <Kpi icon={Zap} tone="rose" label="P1 Critical" value={String(p1)} sub="Open life-threatening incidents" />
           <Kpi icon={Timer} tone="blue" label="Avg. Time to Assign" value={an?.avg_time_to_assign_min != null ? `${an.avg_time_to_assign_min.toFixed(1)} min` : "—"} sub={an?.critical_avg_time_to_assign_min != null ? `P1: ${an.critical_avg_time_to_assign_min.toFixed(1)} min` : "From real assignments"} />
           <Kpi icon={Users} tone="green" label="Teams Available" value={`${avail} / ${teams.length}`} sub={`${teams.filter((t) => t.status === "busy").length} on active missions`} />
         </>) : Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
       </div>
+
+      <OfficialStats stats={stats} teams={teams} className="mt-4" />
 
       <GoldenHourCard />
 
@@ -168,11 +172,12 @@ export default function Dashboard() {
 
         <div className="flex min-w-0 flex-col gap-4 xl:col-span-2">
           <Card className="min-w-0">
-            <CardHeader title="Priority Queue" subtitle="Top open incidents by priority" icon={ClipboardList} />
+            <CardHeader title="Priority Queue" subtitle="Intelligent prioritisation · top open incidents" icon={ClipboardList} />
             <CardBody className="pt-0">
+              <RankExplainer className="mb-1" />
               {!list ? <Skeleton className="h-52" /> : queue.length === 0 ? <EmptyState icon={CheckCircle2} title="All clear" text="No open incidents." /> : (
                 <table className="w-full text-sm">
-                  <thead><tr className="text-left text-xs uppercase tracking-wide text-muted"><th className="py-2 pr-2">#</th><th className="py-2 pr-2">Type</th><th className="py-2 pr-2">Location</th><th className="py-2 pr-2">Priority</th><th className="py-2 text-right">Waiting</th></tr></thead>
+                  <thead><tr className="text-left text-xs uppercase tracking-wide text-muted"><th className="py-2 pr-2">#</th><th className="py-2 pr-2">Type</th><th className="py-2 pr-2">Location</th><th className="py-2 pr-2">Priority</th><th className="py-2 text-right">Score · waiting</th></tr></thead>
                   <tbody>
                     {queue.map((i, k) => (
                       <tr key={i.id} onClick={() => nav(`/admin/incidents/${i.id}`)} className={cn("cursor-pointer border-t border-slate-100 hover:bg-slate-50 dark:border-line dark:hover:bg-surface-2", i.severity === "Critical" && "bg-red-50/50 dark:bg-red-950/20")}>
@@ -180,7 +185,7 @@ export default function Dashboard() {
                         <td className="py-2 pr-2"><CategoryIcon category={i.category} className="size-7" /></td>
                         <td className="max-w-0 py-2 pr-2"><p className="truncate font-medium">{i.area}</p><p className="truncate text-xs text-muted">{CATEGORY_META[i.category]?.short ?? i.category}</p></td>
                         <td className="py-2 pr-2"><span className={cn("rounded-md px-2 py-0.5 text-xs font-bold", PRIO[i.severity].cls)}>{PRIO[i.severity].p}</span></td>
-                        <td className="py-2 text-right font-mono text-xs"><span className={cn(waitMin(i.created_at) > 15 && i.severity === "Critical" && "font-bold text-red-600")}>{waitMin(i.created_at)} min</span></td>
+                        <td className="py-2 text-right"><span className="block font-mono text-xs font-semibold">P {(i.priority_score ?? i.score).toFixed(1)}</span><span className={cn("font-mono text-[11px] text-muted", waitMin(i.created_at) > 15 && i.severity === "Critical" && "font-bold text-red-600")}>waiting {Math.round(i.waiting_min ?? waitMin(i.created_at))} min</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -252,7 +257,7 @@ export default function Dashboard() {
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         <Card className="min-w-0 xl:col-span-2">
-          <CardHeader title="Incidents by category" subtitle="All reports, all statuses" icon={LayoutGrid} />
+          <CardHeader title="Incident distribution by category" subtitle="All reports, all statuses" icon={LayoutGrid} />
           <CardBody>{stats ? <BarChartBox data={catData} x="label" series={[{ key: "Incidents", color: "var(--color-brand-500)" }]} height={260} /> : <Skeleton className="h-[260px]" />}</CardBody>
         </Card>
         <Card>

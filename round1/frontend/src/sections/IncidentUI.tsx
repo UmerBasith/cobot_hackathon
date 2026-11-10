@@ -24,7 +24,29 @@ export const CATEGORIES = Object.keys(CATEGORY_META) as Category[];
 export const ZONE_HEX: Record<"critical" | "evacuate" | "watch" | "safe", string> = { critical: "#dc2626", evacuate: "#ea580c", watch: "#d97706", safe: "#16a34a" };
 export const SEV_HEX: Record<Severity, string> = { Critical: "#dc2626", High: "#ea580c", Medium: "#d97706", Low: "#16a34a" };
 export const SEV_TONE: Record<Severity, "red" | "amber" | "green" | "brand"> = { Critical: "red", High: "brand", Medium: "amber", Low: "green" };
-export const STATUS_TONE: Record<Status, "gray" | "amber" | "blue" | "green"> = { Reported: "gray", Pending: "amber", "In Progress": "blue", Resolved: "green" };
+export const STATUS_TONE: Record<Status, "gray" | "amber" | "blue" | "green" | "indigo"> = { Reported: "gray", Pending: "amber", Assigned: "indigo", "In Progress": "blue", Resolved: "green" };
+export const STATUS_HEX: Record<Status, string> = { Reported: "#94a3b8", Pending: "#f59e0b", Assigned: "#6366f1", "In Progress": "#0ea5e9", Resolved: "#10b981" };
+export const STATUS_DOT: Record<Status, string> = { Reported: "bg-red-500", Pending: "bg-amber-500", Assigned: "bg-indigo-500", "In Progress": "bg-sky-500", Resolved: "bg-emerald-500" };
+
+/** Official Round 2 "Intelligent prioritisation" chip: priority score + time waiting. */
+export function PriorityChip({ inc, className }: { inc: { priority_score?: number; score: number; waiting_min?: number; created_at: string; status: Status }; className?: string }) {
+  const waiting = inc.waiting_min ?? Math.max(0, (Date.now() - new Date(inc.created_at).getTime()) / 60000);
+  const open = inc.status === "Reported" || inc.status === "Pending";
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-[11px]", className)}>
+      <span className="rounded-md bg-brand-50 px-1.5 py-0.5 font-mono font-semibold text-brand-700 ring-1 ring-inset ring-brand-200 dark:bg-brand-900/40 dark:text-brand-200 dark:ring-brand-800" title="Priority score = severity score + time-since-report bonus">P {(inc.priority_score ?? inc.score).toFixed(1)}</span>
+      {open && <span className={cn("font-medium", waiting >= 15 ? "text-red-600 dark:text-red-400" : "text-muted")}>waiting {Math.round(waiting)} min</span>}
+    </span>
+  );
+}
+
+export function RankExplainer({ className }: { className?: string }) {
+  return (
+    <p className={cn("text-[11px] text-muted", className)}>
+      <span className="font-semibold text-ink">Ranked by:</span> severity · people · time waiting · category
+    </p>
+  );
+}
 
 const sevPill: Record<Severity, string> = {
   Critical: "bg-red-600 text-white ring-red-700",

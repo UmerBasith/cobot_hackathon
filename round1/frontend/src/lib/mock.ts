@@ -7,7 +7,7 @@ import { areaByName } from "./geo";
 
 export type Category = "fire" | "road_accident" | "medical" | "flood" | "building_collapse" | "gas_leak" | "electrical" | "landslide" | "other";
 export type Severity = "Low" | "Medium" | "High" | "Critical";
-export type Status = "Reported" | "Pending" | "In Progress" | "Resolved";
+export type Status = "Reported" | "Pending" | "Assigned" | "In Progress" | "Resolved";
 export type Injuries = "none" | "minor" | "serious";
 export type Hazard = "small" | "medium" | "large" | "spreading";
 export type Vulnerable = "children" | "elderly" | "patients" | "disabled" | "pregnant";
@@ -39,6 +39,8 @@ export interface Incident extends Required<Omit<ReportIn, "lat" | "lng" | "repor
   created_at: string; updated_at: string; timeline: TimelineEntry[];
   /** Round 2 (defaults 0 / []) */
   witnesses: number; assignments: Assignment[];
+  /** Round 2 official: priority = severity score + time-since-report bonus; minutes waiting; report channel. */
+  priority_score?: number; waiting_min?: number; source?: "app" | "sms" | "voice" | "call";
 }
 
 /* ------------------------------- Round 2 types ----------------------------- */
@@ -46,7 +48,7 @@ export type TeamType = "fire" | "ambulance_als" | "ambulance_bls" | "police" | "
 export type TeamStatus = "available" | "busy" | "offline";
 export interface Team {
   id: string; name: string; type: TeamType; type_label: string; station: string;
-  lat: number; lng: number; status: TeamStatus; current_incident: string | null;
+  lat: number; lng: number; status: TeamStatus; current_incident: string | null; crew?: number;
 }
 export type AssignmentStatus = "assigned" | "accepted" | "rejected" | "en_route" | "on_scene" | "completed";
 export interface Assignment {
@@ -63,6 +65,7 @@ export interface ResponderJob { assignment: Assignment; incident: Incident }
 
 export interface Stats {
   total: number; critical: number; pending: number; in_progress: number; resolved: number;
+  assigned?: number; available_teams?: number; busy_teams?: number;
   by_category: { category: Category; label: string; count: number }[];
   by_severity: { severity: Severity; count: number }[];
   by_area: { area: string; count: number }[];
@@ -73,7 +76,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   building_collapse: "Building Collapse", gas_leak: "Gas Leak", electrical: "Power Outage / Electrical", landslide: "Landslide", other: "Other Emergency",
 };
 export const SEVERITIES: Severity[] = ["Critical", "High", "Medium", "Low"];
-export const STATUSES: Status[] = ["Reported", "Pending", "In Progress", "Resolved"];
+export const STATUSES: Status[] = ["Reported", "Pending", "Assigned", "In Progress", "Resolved"];
 
 /* ------------------------- fallback severity engine ------------------------ */
 const TIME_CRITICAL: Category[] = ["fire", "gas_leak", "flood", "electrical", "building_collapse", "landslide"];
@@ -132,7 +135,7 @@ const SEEDS: Seed[] = [
   { title: "Fire at T. Nagar textile shop", description: "Smoke and flames from second floor of a textile showroom on Ranganathan Street, crowd nearby.", category: "fire", area: "T. Nagar", people_affected: 15, injured_count: 0, injuries: "minor", life_threat: false, hazard: "large", status: "In Progress", mins: 35, landmark: "Ranganathan Street" },
   { title: "Gas cylinder leak in Mylapore", description: "Strong LPG smell from a hotel kitchen, staff evacuated, cylinder still leaking.", category: "gas_leak", area: "Mylapore", people_affected: 12, injured_count: 0, injuries: "none", life_threat: false, hazard: "medium", status: "Reported", mins: 9, landmark: "Near Kapaleeshwarar temple tank" },
   { title: "Flood at Adyar riverside", description: "Adyar river overflowing into Kotturpuram colony, roads under knee-deep water.", category: "flood", area: "Adyar", people_affected: 40, injured_count: 0, injuries: "none", life_threat: false, hazard: "large", vulnerable: ["elderly"], status: "Reported", mins: 14 },
-  { title: "Live wire fallen at Perambur", description: "Electric line snapped and lying on waterlogged road, sparking.", category: "electrical", area: "Perambur", people_affected: 5, injured_count: 0, injuries: "none", life_threat: false, hazard: "medium", status: "Pending", mins: 21, landmark: "Perambur railway station road" },
+  { title: "Live wire fallen at Perambur", description: "Electric line snapped and lying on waterlogged road, sparking.", category: "electrical", area: "Perambur", people_affected: 5, injured_count: 0, injuries: "none", life_threat: false, hazard: "medium", status: "Assigned", mins: 21, landmark: "Perambur railway station road" },
   { title: "Elderly man collapsed at Anna Nagar park", description: "Man around 70 collapsed while walking, conscious but has chest pain.", category: "medical", area: "Anna Nagar", people_affected: 1, injured_count: 1, injuries: "minor", life_threat: false, hazard: "small", vulnerable: ["elderly"], status: "In Progress", mins: 31, active: false },
   { title: "Bike skid at Guindy flyover", description: "Two-wheeler skidded on wet road, rider has minor scratches.", category: "road_accident", area: "Guindy", people_affected: 1, injured_count: 1, injuries: "minor", life_threat: false, hazard: "small", status: "Reported", mins: 6, active: false },
   { title: "Waterlogging at Sholinganallur", description: "Knee-deep water on OMR service road, traffic slow, no one hurt.", category: "flood", area: "Sholinganallur", people_affected: 0, injured_count: 0, injuries: "none", life_threat: false, hazard: "medium", status: "Reported", mins: 11 },
@@ -151,9 +154,9 @@ function buildIncident(s: Seed, i: number): Incident {
     active: s.active ?? true, vulnerable: s.vulnerable ?? [], contact_name: "", contact_phone: "",
   };
   const sev = localSeverity(r);
-  const order: Status[] = ["Reported", "Pending", "In Progress", "Resolved"];
+  const order: Status[] = ["Reported", "Pending", "Assigned", "In Progress", "Resolved"];
   const notes: Record<Status, string> = {
-    Reported: "Report received", Pending: "Verified by control room, awaiting unit",
+    Reported: "Report received", Pending: "Verified by control room, awaiting unit", Assigned: "Nearest suitable team assigned",
     "In Progress": "Response team on site", Resolved: "Incident closed",
   };
   const steps = order.slice(0, order.indexOf(s.status) + 1);
@@ -163,14 +166,21 @@ function buildIncident(s: Seed, i: number): Incident {
     ...sev, id: `INC-${1001 + i}`, status: s.status, duplicate_of: null,
     created_at: ago(s.mins), updated_at: timeline[timeline.length - 1].at, timeline,
     witnesses: 0, assignments: [],
+    ...prio(sev.score, s.status, s.mins),
   };
+}
+
+/** Mirrors backend: +1 per 2 min while Reported/Pending, max +10. */
+export function prio(score: number, status: Status, mins: number) {
+  const waiting = status === "Reported" || status === "Pending";
+  return { priority_score: +(score + (waiting ? Math.min(10, mins / 2) : 0)).toFixed(1), waiting_min: +mins.toFixed(1), source: "app" as const };
 }
 
 const SEV_RANK: Record<Severity, number> = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 export function sortIncidents(list: Incident[]) {
   return [...list].sort((a, b) =>
     (a.status === "Resolved" ? 1 : 0) - (b.status === "Resolved" ? 1 : 0) ||
-    SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.score - a.score ||
+    SEV_RANK[a.severity] - SEV_RANK[b.severity] || (b.priority_score ?? b.score) - (a.priority_score ?? a.score) ||
     a.created_at.localeCompare(b.created_at));
 }
 
@@ -185,6 +195,9 @@ export function computeStats(list: Incident[]): Stats {
     critical: list.filter((i) => i.severity === "Critical" && i.status !== "Resolved").length,
     pending: list.filter((i) => i.status === "Reported" || i.status === "Pending").length,
     in_progress: list.filter((i) => i.status === "In Progress").length,
+    assigned: list.filter((i) => i.status === "Assigned").length,
+    available_teams: mockTeams.filter((t) => t.status === "available").length,
+    busy_teams: mockTeams.filter((t) => t.status === "busy").length,
     resolved: list.filter((i) => i.status === "Resolved").length,
     by_category: cats.map((c) => ({ category: c, label: CATEGORY_LABEL[c], count: list.filter((i) => i.category === c).length })),
     by_severity: SEVERITIES.map((s) => ({ severity: s, count: list.filter((i) => i.severity === s).length })),
@@ -192,7 +205,6 @@ export function computeStats(list: Incident[]): Stats {
   };
 }
 
-export const mockStats: Stats = computeStats(mockIncidents);
 
 /** Fallback for a created report when the API is unreachable (shown as "saved locally (demo)"). */
 export function mockCreate(r: ReportIn): Incident {
@@ -209,7 +221,7 @@ export function mockCreate(r: ReportIn): Incident {
 /* ------------------------------ Round 2 mocks ------------------------------ */
 const T = (id: string, type: TeamType, type_label: string, name: string, station: string, status: TeamStatus = "available", current_incident: string | null = null): Team => {
   const a = areaByName(station)!;
-  return { id, type, type_label, name, station, lat: a.lat, lng: a.lng, status, current_incident };
+  return { id, type, type_label, name, station, lat: a.lat, lng: a.lng, status, current_incident, crew: 4 };
 };
 export const mockTeams: Team[] = [
   T("FIRE-EGM", "fire", "Fire engine", "Fire Engine · Egmore", "Egmore"),
@@ -226,6 +238,8 @@ export const mockTeams: Team[] = [
   T("BOAT-ADY", "boat", "Rescue boat", "Rescue Boat · Adyar", "Adyar"),
   T("BOAT-VLC", "boat", "Rescue boat", "Rescue Boat · Velachery", "Velachery"),
 ];
+
+export const mockStats: Stats = computeStats(mockIncidents);
 
 const km = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
   const R = 6371, dLat = ((b.lat - a.lat) * Math.PI) / 180, dLng = ((b.lng - a.lng) * Math.PI) / 180;

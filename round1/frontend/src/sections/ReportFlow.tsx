@@ -6,7 +6,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
 import {
   AlertTriangle, ArrowLeft, ArrowRight, Check, CheckCircle2, Copy, Gauge, HeartPulse, ImagePlus, LayoutDashboard, MapPin, Minus,
-  Pencil, Phone, Plus, Radar, Send, UserX, WifiOff, X,
+  Keyboard, Mic, Pencil, Phone, Plus, Radar, Send, Sparkles, Square, UserX, WifiOff, X,
 } from "lucide-react";
 import { useToast } from "@/ui";
 import { cn } from "@/lib/cn";
@@ -16,6 +16,8 @@ import {
 } from "@/lib/mock";
 import { createIncident, previewSeverity } from "@/lib/resq";
 import { STATIC } from "@/lib/static";
+import { parseText, type ParseOut } from "@/lib/innovation";
+import { speechSupported, useSpeech } from "@/lib/speech";
 import { CATEGORY_META, ReasonsList, SeverityBadge, SEV_HEX, StatusBadge } from "./IncidentUI";
 import { LazyMap } from "./LazyMap";
 
@@ -121,6 +123,7 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
   const [done, setDone] = useState<{ inc: Incident; local: boolean } | null>(null);
   const [showErr, setShowErr] = useState(false);
   const [editLL, setEditLL] = useState(false);
+  const [voice, setVoice] = useState<{ conf: number; text: string; how: "voice" | "typed" } | null>(null);
   const top = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -167,6 +170,23 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
     go(mStep + 1);
   }
 
+  /** Speak-to-Report: fill the whole form from one sentence (voice or typed). */
+  function applyParse(p: ParseOut, text: string, how: "voice" | "typed") {
+    const x = p.fields;
+    const a = x.area ? areaByName(x.area) : undefined;
+    setF((cur) => ({
+      ...cur, category: x.category, people_affected: Math.max(1, x.people_affected || 1), life_threat: x.life_threat,
+      injuries: x.injuries, injured_count: x.injured_count, hazard: x.hazard, active: x.active, vulnerable: x.vulnerable,
+      description: text.slice(0, DESC_MAX),
+      ...(a ? { area: a.name, lat: a.lat, lng: a.lng } : {}),
+      reported_severity: x.life_threat ? "Critical" : cur.reported_severity,
+    }));
+    setPicked(true); setExtras(true); setTitleTouched(false); setShowErr(false);
+    setVoice({ conf: p.confidence, text, how });
+    toast("success", how === "voice" ? "Filled from your voice" : "Filled from your text",
+      `${CATEGORY_META[x.category]?.short ?? x.category}${a ? ` · ${a.name}` : " · pick your area"} · ${Math.round(p.confidence * 100)}% confident`);
+  }
+
   async function submit() {
     if (Object.keys(errs).length) {
       setShowErr(true); toast("warning", "Please complete the form", Object.values(errs)[0]);
@@ -178,6 +198,7 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
       ...f, title: f.title.trim().length >= 3 ? f.title.trim() : `${label} at ${f.area}`,
       contact_name: f.anonymous ? "" : f.contact_name, contact_phone: f.anonymous ? "" : f.contact_phone,
     };
+    if (voice) (body as ReportIn & { source?: string }).source = "voice";
     setBusy(true);
     try {
       const inc = await createIncident(body);
@@ -198,7 +219,7 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
     catch { toast("error", "Could not read photo", "Try another image."); }
   }
 
-  function reset() { setF(empty); setPicked(false); setExtras(false); setTitleTouched(false); setPreview(null); setDone(null); setMStep(0); setShowErr(false); }
+  function reset() { setF(empty); setPicked(false); setExtras(false); setTitleTouched(false); setPreview(null); setDone(null); setMStep(0); setShowErr(false); setVoice(null); }
 
   if (done) return <Result inc={done.inc} local={done.local} admin={admin} onNew={reset} />;
 
@@ -208,6 +229,17 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
   /* ---------- sections ---------- */
   const secType = (
     <div className="space-y-6">
+      <VoicePanel onParsed={applyParse} />
+      {voice && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          <Sparkles className="mt-0.5 size-4 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Filled from your {voice.how === "voice" ? "voice" : "words"} — please check</p>
+            <p className="mt-0.5 truncate text-xs opacity-80">"{voice.text}"</p>
+          </div>
+          <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900 dark:text-amber-100 dark:ring-amber-700">{Math.round(voice.conf * 100)}% sure</span>
+        </div>
+      )}
       <div>
         <Label icon={<AlertTriangle className="size-4 text-[#e53935]" />}>What's the emergency? <Req /></Label>
         <div className="grid grid-cols-4 gap-2 sm:gap-2.5">
@@ -524,6 +556,73 @@ export function ReportFlow({ admin = false }: { admin?: boolean }) {
         </div>
       </div>
       <div className="mt-6 lg:hidden"><Call112Card /></div>
+    </div>
+  );
+}
+
+/* ---------- Speak to Report ---------- */
+
+function VoicePanel({ onParsed }: { onParsed: (p: ParseOut, text: string, how: "voice" | "typed") => void }) {
+  const [lang, setLang] = useState<"en-IN" | "ta-IN">("en-IN");
+  const [typed, setTyped] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [showType, setShowType] = useState(false);
+  const supported = useMemo(() => speechSupported(), []);
+  async function run(text: string, how: "voice" | "typed") {
+    if (text.trim().length < 3) return;
+    setParsing(true);
+    try { onParsed(await parseText(text.trim()), text.trim(), how); if (how === "typed") setTyped(""); }
+    finally { setParsing(false); }
+  }
+  const sp = useSpeech((t) => run(t, "voice"));
+  const typeOpen = showType || !supported || !!sp.error;
+  const errMsg = sp.error === "not-allowed" ? "Microphone permission was blocked." : sp.error === "no-speech" ? "We didn't hear anything — try again." :
+    sp.error === "unsupported" ? "Voice isn't supported in this browser." : sp.error ? "Voice didn't work here." : null;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-red-100 bg-gradient-to-br from-red-50 via-white to-blue-50 p-3.5 sm:p-4 dark:border-red-900/50 dark:from-red-950/30 dark:via-slate-900 dark:to-blue-950/30">
+      <div className="flex flex-wrap items-center gap-3">
+        <button type="button" disabled={parsing || !supported} onClick={() => (sp.listening ? sp.stop() : sp.listen(lang))}
+          aria-label={sp.listening ? "Stop listening" : "Speak your emergency"}
+          className={cn("relative flex h-14 min-w-0 flex-1 items-center justify-center gap-2.5 rounded-xl px-4 text-[15px] font-semibold text-white transition active:scale-[.99] disabled:opacity-60",
+            sp.listening ? "bg-[#0f1f3d]" : "bg-[#e53935] shadow-[0_10px_24px_-8px_rgba(229,57,53,.6)] hover:bg-[#d32f2f]")}>
+          {sp.listening && <span className="absolute inset-0 animate-pulse rounded-xl ring-4 ring-red-300/60" />}
+          {parsing ? <span className="size-5 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : sp.listening ? <Square className="size-4 fill-current" /> : <Mic className="size-5" />}
+          <span className="truncate">{parsing ? "Understanding…" : sp.listening ? "Listening… tap to stop" : "🎤 Speak your emergency"}</span>
+        </button>
+        <div className="inline-flex shrink-0 rounded-xl bg-white p-1 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700" role="group" aria-label="Voice language">
+          {([["en-IN", "English"], ["ta-IN", "தமிழ்"]] as const).map(([v, l]) => (
+            <button key={v} type="button" onClick={() => setLang(v)}
+              className={cn("rounded-lg px-3 py-2 text-xs font-semibold transition", lang === v ? "bg-[#0f1f3d] text-white" : "text-slate-600 hover:text-[#0f1f3d] dark:text-slate-300")}>{l}</button>
+          ))}
+        </div>
+      </div>
+      {(sp.listening || sp.interim) && (
+        <p className="mt-3 flex items-start gap-2 rounded-lg bg-white/80 px-3 py-2 text-sm text-[#0f1f3d] ring-1 ring-slate-200 dark:bg-slate-900/80 dark:text-slate-100 dark:ring-slate-700">
+          {sp.listening && <span className="mt-1.5 size-2 shrink-0 animate-pulse rounded-full bg-[#e53935]" />}
+          <span className="min-w-0 break-words">{sp.interim || <span className="text-slate-400">Say what happened, where, and how many people…</span>}</span>
+        </p>
+      )}
+      <p className="mt-2.5 text-xs text-slate-500">
+        One sentence fills the whole form — type, area, people, injuries, danger. e.g. <i>"Fire in T Nagar, 5 people trapped"</i>.
+        {errMsg && <b className="ml-1 text-amber-700 dark:text-amber-400">{errMsg} Type it instead below.</b>}
+      </p>
+      {typeOpen ? (
+        <div className="mt-2.5 flex gap-2">
+          <textarea value={typed} onChange={(e) => setTyped(e.target.value)} rows={2} maxLength={500} aria-label="Type it instead"
+            placeholder={lang === "ta-IN" ? "வேளச்சேரியில் வெள்ளம், குழந்தைகள் சிக்கி இருக்காங்க" : "Type it instead — e.g. flood in Velachery, 4 children stuck"}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); run(typed, "typed"); } }}
+            className="min-w-0 flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-[#0f1f3d] outline-none placeholder:text-slate-400 focus:border-[#e53935] focus:ring-4 focus:ring-red-100 dark:border-slate-700 dark:bg-slate-900 dark:text-white" />
+          <button type="button" disabled={parsing || typed.trim().length < 3} onClick={() => run(typed, "typed")}
+            className="flex shrink-0 items-center gap-1.5 self-stretch rounded-xl bg-[#0f1f3d] px-3.5 text-sm font-semibold text-white disabled:opacity-40">
+            <Sparkles className="size-4" /><span className="hidden min-[400px]:inline">Fill form</span>
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setShowType(true)} className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-[#1e63d6] hover:underline">
+          <Keyboard className="size-3.5" />Type it instead
+        </button>
+      )}
     </div>
   );
 }

@@ -11,4 +11,4 @@ export function LazyMap(props: IncidentMapProps) {
     </Suspense>
   );
 }
-export type { MapPoint } from "./IncidentMap";
+export type { MapPoint, RouteLine } from "./IncidentMap";

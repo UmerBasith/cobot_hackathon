@@ -55,7 +55,7 @@ def assess(r: dict[str, Any]) -> dict[str, Any]:
     pp = people_points(people)
     place_pts = PLACE_POINTS.get(place[1], 0) if place else 0
     if pp:
-        reasons.append({"label": f"{people} people affected", "points": pp, "rule": None})
+        reasons.append({"label": f"{people} {'person' if people == 1 else 'people'} affected", "points": pp, "rule": None})
     if place_pts:
         reasons.append({"label": f"Near {place[0]} ({place[1]})", "points": min(place_pts, 20 - pp), "rule": None})
     # V — vulnerability (cap 10)

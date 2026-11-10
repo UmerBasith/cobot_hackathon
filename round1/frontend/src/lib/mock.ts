@@ -33,7 +33,29 @@ export interface Incident extends Required<Omit<ReportIn, "lat" | "lng">>, Sever
   id: string; lat: number | null; lng: number | null;
   status: Status; duplicate_of: string | null;
   created_at: string; updated_at: string; timeline: TimelineEntry[];
+  /** Round 2 (defaults 0 / []) */
+  witnesses: number; assignments: Assignment[];
 }
+
+/* ------------------------------- Round 2 types ----------------------------- */
+export type TeamType = "fire" | "ambulance_als" | "ambulance_bls" | "police" | "ndrf" | "boat";
+export type TeamStatus = "available" | "busy" | "offline";
+export interface Team {
+  id: string; name: string; type: TeamType; type_label: string; station: string;
+  lat: number; lng: number; status: TeamStatus; current_incident: string | null;
+}
+export type AssignmentStatus = "assigned" | "accepted" | "rejected" | "en_route" | "on_scene" | "completed";
+export interface Assignment {
+  id: string; team_id: string; team_name: string; team_type: TeamType; status: AssignmentStatus;
+  eta_min: number; distance_km: number; reject_reason: string | null; note: string | null;
+  assigned_at: string; updated_at: string;
+}
+export interface SuggestSlot { slot: string; best: string | null; candidates: { team: Team; eta_min: number; distance_km: number }[] }
+export interface Escalation { level: "critical" | "warning"; incident_id: string | null; message: string }
+export interface Similar { id: string; title: string; severity: Severity; status: Status; distance_m: number; minutes_apart: number }
+export type AlertLevel = "info" | "warning" | "danger";
+export interface Alert { id: string; area: string; message: string; level: AlertLevel; hours: number; created_at: string; expires_at: string }
+export interface ResponderJob { assignment: Assignment; incident: Incident }
 
 export interface Stats {
   total: number; critical: number; pending: number; in_progress: number; resolved: number;
@@ -136,6 +158,7 @@ function buildIncident(s: Seed, i: number): Incident {
     ...r, lat: r.lat ?? null, lng: r.lng ?? null, landmark: r.landmark ?? "", contact_name: "", contact_phone: "",
     ...sev, id: `INC-${1001 + i}`, status: s.status, duplicate_of: null,
     created_at: ago(s.mins), updated_at: timeline[timeline.length - 1].at, timeline,
+    witnesses: 0, assignments: [],
   };
 }
 
@@ -175,5 +198,62 @@ export function mockCreate(r: ReportIn): Incident {
     ...r, lat: r.lat ?? null, lng: r.lng ?? null, landmark: r.landmark ?? "", contact_name: r.contact_name ?? "", contact_phone: r.contact_phone ?? "",
     ...sev, id: `INC-${Math.floor(2000 + Math.random() * 7000)}`, status: "Reported", duplicate_of: null,
     created_at: t, updated_at: t, timeline: [{ at: t, status: "Reported", note: "Report received (saved locally — demo)", actor: "citizen" }],
+    witnesses: 0, assignments: [],
   };
 }
+
+/* ------------------------------ Round 2 mocks ------------------------------ */
+const T = (id: string, type: TeamType, type_label: string, name: string, station: string, status: TeamStatus = "available", current_incident: string | null = null): Team => {
+  const a = areaByName(station)!;
+  return { id, type, type_label, name, station, lat: a.lat, lng: a.lng, status, current_incident };
+};
+export const mockTeams: Team[] = [
+  T("FIRE-EGM", "fire", "Fire engine", "Fire Engine · Egmore", "Egmore"),
+  T("FIRE-TBM", "fire", "Fire engine", "Fire Engine · Tambaram", "Tambaram"),
+  T("FIRE-GDY", "fire", "Fire engine", "Fire Engine · Guindy", "Guindy", "busy", "INC-1004"),
+  T("FIRE-TNG", "fire", "Fire engine", "Fire Engine · T. Nagar", "T. Nagar", "busy", "INC-1004"),
+  T("ALS-GGH", "ambulance_als", "ALS ambulance", "ALS Ambulance · Govt General", "Egmore"),
+  T("ALS-VLC", "ambulance_als", "ALS ambulance", "ALS Ambulance · Velachery", "Velachery"),
+  T("BLS-ADY", "ambulance_bls", "BLS ambulance", "BLS Ambulance · Adyar", "Adyar"),
+  T("BLS-ANN", "ambulance_bls", "BLS ambulance", "BLS Ambulance · Anna Nagar", "Anna Nagar"),
+  T("POL-MYL", "police", "Police", "Police Patrol · Mylapore", "Mylapore"),
+  T("POL-TBM", "police", "Police", "Police Patrol · Tambaram", "Tambaram"),
+  T("NDRF-VDL", "ndrf", "NDRF rescue", "NDRF Team · Vandalur", "Vandalur"),
+  T("BOAT-ADY", "boat", "Rescue boat", "Rescue Boat · Adyar", "Adyar", "busy", "INC-1006"),
+];
+
+const km = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const R = 6371, dLat = ((b.lat - a.lat) * Math.PI) / 180, dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+};
+const SLOTS: Record<Category, [string, TeamType[]][]> = {
+  fire: [["Fire engine", ["fire"]], ["Ambulance", ["ambulance_als", "ambulance_bls"]]],
+  gas_leak: [["Fire engine", ["fire"]], ["Police", ["police"]]],
+  electrical: [["Fire engine", ["fire"]]],
+  flood: [["Rescue boat", ["boat", "ndrf"]], ["Ambulance", ["ambulance_als", "ambulance_bls"]]],
+  building_collapse: [["NDRF rescue", ["ndrf", "fire"]], ["Ambulance", ["ambulance_als", "ambulance_bls"]]],
+  road_accident: [["Ambulance", ["ambulance_als", "ambulance_bls"]], ["Police", ["police"]]],
+  medical: [["Ambulance", ["ambulance_als", "ambulance_bls"]]],
+  other: [["Police", ["police"]]],
+};
+/** Offline approximation of /suggest (nearest available team per slot, 25 km/h city speed). */
+export function mockSuggest(inc: Incident, teams: Team[] = mockTeams): SuggestSlot[] {
+  const at = { lat: inc.lat ?? 13.04, lng: inc.lng ?? 80.23 };
+  return (SLOTS[inc.category] ?? SLOTS.other).map(([slot, types]) => {
+    const candidates = teams.filter((t) => types.includes(t.type) && t.status === "available")
+      .map((team) => { const d = km(at, team); return { team, distance_km: +d.toFixed(1), eta_min: +(2 + (d / 25) * 60).toFixed(1) }; })
+      .sort((a, b) => a.eta_min - b.eta_min).slice(0, 3);
+    return { slot, best: candidates[0]?.team.id ?? null, candidates };
+  });
+}
+
+export const mockEscalations: Escalation[] = mockIncidents
+  .filter((i) => i.status !== "Resolved" && i.severity === "Critical")
+  .map((i) => ({ level: "critical" as const, incident_id: i.id, message: `${i.id} Critical · ${i.title} — no team assigned yet` }));
+
+export const mockAlerts: Alert[] = [{
+  id: "ALT-1", area: "Velachery", level: "danger", hours: 6,
+  message: "Heavy flooding near Velachery lake. Move to upper floors, avoid 100 Feet Road.",
+  created_at: new Date(now - 20 * 60000).toISOString(), expires_at: new Date(now + 5.6 * 3600000).toISOString(),
+}];

@@ -25,6 +25,11 @@ export function TeamIcon({ type, className }: { type: TeamType; className?: stri
   return <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300", className)}><I className="size-4" /></span>;
 }
 
+const SLOT_TYPES: Record<string, TeamType[]> = {
+  "Rescue boat": ["boat", "ndrf"], Ambulance: ["ambulance_als", "ambulance_bls"], "Fire engine": ["fire"],
+  Police: ["police"], "NDRF rescue": ["ndrf", "fire"],
+};
+
 export function DispatchCard({ inc, onChange }: { inc: Incident; onChange: () => void }) {
   const toast = useToast();
   const [slots, setSlots] = useState<SuggestSlot[] | null>(null);
@@ -42,19 +47,30 @@ export function DispatchCard({ inc, onChange }: { inc: Incident; onChange: () =>
     finally { setBusy(null); }
   }
 
-  const bestIds = (slots ?? []).map((s) => s.best).filter((x): x is string => !!x && !activeIds.includes(x));
+  const active = inc.assignments.filter((a) => !["rejected", "completed"].includes(a.status));
+  const coveredBy = (s: SuggestSlot) => {
+    const types = new Set<TeamType>([...(SLOT_TYPES[s.slot] ?? []), ...s.candidates.map((c) => c.team.type)]);
+    return active.find((a) => types.has(a.team_type));
+  };
+  const bestIds = (slots ?? []).filter((s) => !coveredBy(s)).map((s) => s.best).filter((x): x is string => !!x && !activeIds.includes(x));
   const resolved = inc.status === "Resolved";
 
   return (
     <Card className={cn(!resolved && inc.assignments.length === 0 && (inc.severity === "Critical" || inc.severity === "High") && "ring-2 ring-red-300 dark:ring-red-900")}>
       <CardHeader title="Dispatch" subtitle="Right team per need, ranked by ETA" icon={Truck}
-        action={inc.assignments.length ? <Badge tone="blue">{activeIds.length} active</Badge> : !resolved ? <Badge tone="red" dot pulse>Unassigned</Badge> : undefined} />
+        action={inc.assignments.length ? <Badge tone="blue" className="whitespace-nowrap">{activeIds.length} active</Badge> : !resolved ? <Badge tone="red" dot pulse className="whitespace-nowrap">Unassigned</Badge> : undefined} />
       <CardBody className="space-y-4">
         {!resolved && (
           <>
             {!slots ? <Skeleton className="h-28" /> : slots.length === 0 ? <p className="text-sm text-muted">No suggestion for this category.</p> : (
               <div className="space-y-3">
-                {slots.map((s) => (
+                {slots.map((s) => { const cov = coveredBy(s); return cov ? (
+                  <div key={s.slot} className="flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 dark:border-emerald-900 dark:bg-emerald-950/30">
+                    <TeamIcon type={cov.team_type} />
+                    <div className="min-w-0 flex-1"><p className="text-xs font-medium uppercase tracking-wider text-muted">{s.slot}</p><p className="truncate text-sm font-medium">{cov.team_name}</p></div>
+                    <Badge tone="green"><Check className="size-3" />Covered</Badge>
+                  </div>
+                ) : (
                   <div key={s.slot} className="rounded-xl border border-line p-3">
                     <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">{s.slot}</p>
                     {s.candidates.length === 0 && <p className="text-sm text-red-600 dark:text-red-400">No {s.slot.toLowerCase()} available — shortage</p>}
@@ -75,7 +91,7 @@ export function DispatchCard({ inc, onChange }: { inc: Incident; onChange: () =>
                       })}
                     </div>
                   </div>
-                ))}
+                ); })}
               </div>
             )}
             {bestIds.length > 0 && (

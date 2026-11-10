@@ -152,3 +152,24 @@ UI to add (in this order, stop if time runs out):
 5. **`/app/alerts`**: create alert form (area select incl. "All Chennai", message, level, hours) + active list. Citizen `/report` shows active alerts as a banner at top.
 6. Dashboard: **"Simulate flood"** button (calls /simulate, toast) next to Reset; teams-available tile or small card.
 Nav: Dashboard, Incidents, Teams, Alerts, New report · header links "Citizen view" (/report) and "Responder app" (/responder).
+
+## 11. FINAL PAGE LIST (from the user) — 3 pages added
+Citizen: 1 Landing `/` · 2 Emergency reporting `/report` · 3 **Incident tracking `/track` and `/track/:id`** (NEW)
+Admin: 1 Command centre `/app` · 2 Incident details & management · 3 Response teams `/app/teams` · 4 Public safety alerts `/app/alerts` · 5 **Analytics & performance `/app/analytics`** (NEW) · 6 **Disaster zones & shelters `/app/zones`** (NEW)
+Responder: 1 Responder dashboard `/responder`
+
+Backend (live, 27 tests pass):
+| Method | Path | Body | Response |
+|---|---|---|---|
+| GET | /api/track/{id} | – | `TrackOut` = `{id, title, category, area, landmark, severity, score, reasons, status, duplicate_of, created_at, updated_at, timeline, teams:[{team_name, team_type, status, eta_min}]}` (no contact details; 404 if unknown) |
+| GET | /api/zones | – | `Zone[]` = `{id(area), area, lat, lng, status:"critical"|"evacuate"|"watch"|"safe", note, open_incidents, critical_incidents, updated_at}` sorted worst first |
+| PATCH | /api/zones/{area} | `{status, note}` | Zone |
+| GET | /api/shelters | – | `Shelter[]` = `{id, name, area, lat, lng, capacity, occupancy, facilities: string[]}` |
+| PATCH | /api/shelters/{id} | `{occupancy}` | Shelter (400 if > capacity) |
+| GET | /api/analytics | – | `{total, open, resolved, resolution_rate, avg_time_to_assign_min|null, avg_time_to_resolve_min|null, critical_avg_time_to_assign_min|null, teams_total, teams_busy, utilisation, rejections, by_hour:[{hour(ISO), reported, resolved}] (last 6 h), by_area:[{area,total,critical,open}], by_category:[{category,label,total,avg_score}], by_severity:[{severity,total,open}], by_status:[{status,count}], team_performance:[{team_id,team_name,type_label,jobs,completed,rejected,avg_eta_min|null}]}` |
+
+UI:
+- `/track` (citizen, mobile-first, same header as /report): enter reference ID → `/track/INC-1012`: big status stepper (Reported → Pending → In Progress → Resolved), severity + reasons, teams on the way with ETA + status chips, timeline, "Call 112". Refresh every 5 s. The /report success screen gets a "Track this report" button → /track/:id. Landing + /report header get a "Track report" link.
+- `/app/analytics`: KPI tiles (resolution rate, avg time to assign, critical avg time to assign, team utilisation), reported vs resolved by hour (area/line), by area (bar, critical stacked), by category (bar with avg score), status mix, team performance table (jobs, completed, rejected, avg ETA). Label times "measured from demo data".
+- `/app/zones`: map with zone circles coloured by status (critical red, evacuate orange, watch amber, safe green) + shelter markers; zone list with status select + note (PATCH) and open/critical incident counts; shelters list with occupancy bars (% full, red when ≥90%), +10/−10 buttons (PATCH), facilities chips; tiles: total shelter capacity, people sheltered, % full, zones under evacuation.
+- Nav: Dashboard, Incidents, Teams, Alerts, Analytics, Zones & shelters, New report.

@@ -173,3 +173,30 @@ def test_alerts_simulate_escalations(client):
         assert client.get(f"/api/incidents/{i}").status_code == 200
     esc = client.get("/api/escalations").json()
     assert any(e["level"] == "critical" for e in esc)
+
+
+# ---------- Tracking, zones, shelters, analytics ----------
+def test_tracking_hides_contact(client):
+    inc = client.post("/api/incidents", json=report(contact_phone="98400 00000", life_threat=True)).json()
+    t = client.get(f"/api/track/{inc['id'].lower()}").json()
+    assert t["id"] == inc["id"] and t["severity"] == "Critical" and "contact_phone" not in t
+    assert client.get("/api/track/INC-0000").status_code == 404
+
+
+def test_zones_and_shelters(client):
+    z = client.get("/api/zones").json()
+    assert len(z) == 14 and z[0]["status"] == "critical"
+    up = client.patch("/api/zones/Guindy", json={"status": "evacuate", "note": "River overflow"}).json()
+    assert up["status"] == "evacuate"
+    assert client.patch("/api/zones/Mars", json={"status": "safe"}).status_code == 404
+    sh = client.get("/api/shelters").json()
+    assert len(sh) == 6
+    assert client.patch(f"/api/shelters/{sh[0]['id']}", json={"occupancy": 10}).json()["occupancy"] == 10
+    assert client.patch(f"/api/shelters/{sh[0]['id']}", json={"occupancy": 99999}).status_code == 400
+
+
+def test_analytics(client):
+    a = client.get("/api/analytics").json()
+    assert a["total"] == 12 and a["resolved"] == 2 and a["teams_total"] == 13
+    assert a["avg_time_to_assign_min"] is not None and len(a["by_hour"]) == 6
+    assert sum(c["total"] for c in a["by_category"]) == 12

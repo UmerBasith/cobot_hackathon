@@ -13,7 +13,9 @@ from .dispatch import active_assignments, escalations, eta, make_teams, similar,
 from .schemas import (Alert, AlertIn, AssignIn, AssignmentStatusIn, DuplicateIn, Escalation, Incident, PreviewIn,
                       ReportIn, RespondIn, ResponderJob, SeverityOut, Similar, SimulateIn, Stats, StatusIn,
                       SuggestSlot, Team)
+from .schemas import Analytics, Shelter, ShelterIn, TrackOut, Zone, ZoneIn
 from .seed import SEED, SIMULATE_FLOOD
+from .zones import SHELTERS_SEED, ZONES_SEED
 from .severity import CATEGORY_LABELS, LEVELS, assess, level_for
 
 STATUSES = ["Reported", "Pending", "In Progress", "Resolved"]
@@ -85,6 +87,13 @@ def reset_data() -> int:
     db.clear()
     db.clear_docs("team")
     db.clear_docs("alert")
+    db.clear_docs("zone")
+    db.clear_docs("shelter")
+    for area, st, note in ZONES_SEED:
+        db.put_doc("zone", {"id": area, "area": area, "status": st, "note": note, "updated_at": now_iso()})
+    for sid, name, area, lat, lng, cap, occ, fac in SHELTERS_SEED:
+        db.put_doc("shelter", {"id": sid, "name": name, "area": area, "lat": lat, "lng": lng, "capacity": cap,
+                               "occupancy": occ, "facilities": fac})
     for t in make_teams():
         db.put_doc("team", t)
     for minutes, status, report in sorted(SEED, key=lambda s: -s[0]):
@@ -394,3 +403,129 @@ def simulate(body: SimulateIn) -> dict:
         inc = db.insert(lambda seq, r=full, m=minutes: build_incident(seq, r, "Reported", m))
         ids.append(inc["id"])
     return {"ok": True, "created": ids, "scenario": body.scenario}
+
+
+# ======================= Citizen tracking, zones & shelters, analytics =======================
+@app.get("/api/track/{inc_id}", response_model=TrackOut)
+def track(inc_id: str) -> dict:
+    inc = get_or_404(inc_id.strip())
+    teams = [{"team_name": a["team_name"], "team_type": a["team_type"], "status": a["status"], "eta_min": a["eta_min"]}
+             for a in inc.get("assignments", []) if a["status"] != "rejected"]
+    return {**{k: inc[k] for k in TrackOut.model_fields if k in inc}, "teams": teams}
+
+
+@app.get("/api/zones", response_model=list[Zone])
+def zones() -> list[dict]:
+    from .geo import AREAS
+    open_inc = [i for i in db.all_incidents() if i["status"] != "Resolved"]
+    out = []
+    for z in db.docs("zone"):
+        lat, lng = AREAS[z["area"]]
+        here = [i for i in open_inc if i["area"] == z["area"]]
+        out.append({**z, "lat": lat, "lng": lng, "open_incidents": len(here),
+                    "critical_incidents": sum(i["severity"] == "Critical" for i in here)})
+    order = {"critical": 0, "evacuate": 1, "watch": 2, "safe": 3}
+    return sorted(out, key=lambda z: (order[z["status"]], -z["open_incidents"]))
+
+
+@app.patch("/api/zones/{area}", response_model=Zone)
+def update_zone(area: str, body: ZoneIn) -> dict:
+    z = next((z for z in db.docs("zone") if z["area"].lower() == area.lower()), None)
+    if not z:
+        raise HTTPException(404, f"Zone {area} not found")
+    z.update(status=body.status, note=body.note.strip() or z["note"], updated_at=now_iso())
+    db.put_doc("zone", z)
+    return next(x for x in zones() if x["id"] == z["id"])
+
+
+@app.get("/api/shelters", response_model=list[Shelter])
+def shelters() -> list[dict]:
+    return db.docs("shelter")
+
+
+@app.patch("/api/shelters/{sid}", response_model=Shelter)
+def update_shelter(sid: str, body: ShelterIn) -> dict:
+    sh = next((x for x in db.docs("shelter") if x["id"] == sid.upper()), None)
+    if not sh:
+        raise HTTPException(404, f"Shelter {sid} not found")
+    if body.occupancy > sh["capacity"]:
+        raise HTTPException(400, f"Occupancy cannot exceed capacity ({sh['capacity']})")
+    sh["occupancy"] = body.occupancy
+    db.put_doc("shelter", sh)
+    return sh
+
+
+def _mins(a: str, b: str) -> float:
+    ta = datetime.fromisoformat(a.replace("Z", "+00:00"))
+    tb = datetime.fromisoformat(b.replace("Z", "+00:00"))
+    return (tb - ta).total_seconds() / 60
+
+
+def _avg(xs: list[float]) -> float | None:
+    return round(sum(xs) / len(xs), 1) if xs else None
+
+
+@app.get("/api/analytics", response_model=Analytics)
+def analytics() -> dict:
+    items = db.all_incidents()
+    teams = db.docs("team")
+    assign_t, crit_assign_t, resolve_t = [], [], []
+    rejections = 0
+    perf: dict[str, dict] = {t["id"]: {"team_id": t["id"], "team_name": t["name"], "type_label": t["type_label"],
+                                       "jobs": 0, "completed": 0, "rejected": 0, "_eta": []} for t in teams}
+    for i in items:
+        asg = i.get("assignments", [])
+        if asg:
+            m = _mins(i["created_at"], min(a["assigned_at"] for a in asg))
+            assign_t.append(m)
+            if i["severity"] == "Critical":
+                crit_assign_t.append(m)
+        res = next((e["at"] for e in i["timeline"] if e["status"] == "Resolved"), None)
+        if res and i["status"] == "Resolved" and not i.get("duplicate_of"):
+            resolve_t.append(_mins(i["created_at"], res))
+        for a in asg:
+            p = perf.get(a["team_id"])
+            rejections += a["status"] == "rejected"
+            if p:
+                p["jobs"] += 1
+                p["completed"] += a["status"] == "completed"
+                p["rejected"] += a["status"] == "rejected"
+                p["_eta"].append(a["eta_min"])
+    # last 6 hours, hourly buckets
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    by_hour = []
+    for h in range(5, -1, -1):
+        start = now - timedelta(hours=h)
+        end = start + timedelta(hours=1)
+        inb = lambda iso: start <= datetime.fromisoformat(iso.replace("Z", "+00:00")) < end  # noqa: E731
+        by_hour.append({"hour": start.isoformat(timespec="minutes").replace("+00:00", "Z"),
+                        "reported": sum(inb(i["created_at"]) for i in items),
+                        "resolved": sum(any(e["status"] == "Resolved" and inb(e["at"]) for e in i["timeline"])
+                                        for i in items)})
+    areas: dict[str, dict] = {}
+    for i in items:
+        a = areas.setdefault(i["area"], {"area": i["area"], "total": 0, "critical": 0, "open": 0})
+        a["total"] += 1
+        a["critical"] += i["severity"] == "Critical"
+        a["open"] += i["status"] != "Resolved"
+    resolved = sum(i["status"] == "Resolved" for i in items)
+    busy = sum(t["status"] == "busy" for t in teams)
+    return {
+        "total": len(items), "open": len(items) - resolved, "resolved": resolved,
+        "resolution_rate": round(100 * resolved / len(items), 1) if items else 0.0,
+        "avg_time_to_assign_min": _avg(assign_t), "avg_time_to_resolve_min": _avg(resolve_t),
+        "critical_avg_time_to_assign_min": _avg(crit_assign_t),
+        "teams_total": len(teams), "teams_busy": busy,
+        "utilisation": round(100 * busy / len(teams), 1) if teams else 0.0, "rejections": rejections,
+        "by_hour": by_hour,
+        "by_area": sorted(areas.values(), key=lambda a: (-a["critical"], -a["total"])),
+        "by_category": [{"category": c, "label": lbl, "total": len(xs),
+                         "avg_score": round(sum(x["score"] for x in xs) / len(xs), 1) if xs else 0}
+                        for c, lbl in CATEGORY_LABELS.items() for xs in [[i for i in items if i["category"] == c]]],
+        "by_severity": [{"severity": s, "total": sum(i["severity"] == s for i in items),
+                         "open": sum(i["severity"] == s and i["status"] != "Resolved" for i in items)}
+                        for s in reversed(LEVELS)],
+        "by_status": [{"status": s, "count": sum(i["status"] == s for i in items)} for s in STATUSES],
+        "team_performance": [{**{k: v for k, v in p.items() if k != "_eta"}, "avg_eta_min": _avg(p["_eta"])}
+                             for p in perf.values()],
+    }

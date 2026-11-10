@@ -200,3 +200,76 @@ class Alert(AlertIn):
 
 class SimulateIn(BaseModel):
     scenario: Literal["chennai_flood"] = "chennai_flood"
+
+
+class TrackOut(BaseModel):
+    """Public view for the citizen tracking page (no contact details)."""
+    id: str
+    title: str
+    category: Category
+    area: str
+    landmark: str
+    severity: Severity
+    score: int
+    reasons: list[Reason]
+    status: Status
+    duplicate_of: str | None
+    created_at: str
+    updated_at: str
+    timeline: list[TimelineEntry]
+    teams: list[dict]  # [{team_name, team_type, status, eta_min}]
+
+
+ZoneStatus = Literal["critical", "evacuate", "watch", "safe"]
+
+
+class Zone(BaseModel):
+    id: str  # area name
+    area: str
+    lat: float
+    lng: float
+    status: ZoneStatus
+    note: str
+    open_incidents: int
+    critical_incidents: int
+    updated_at: str
+
+
+class ZoneIn(BaseModel):
+    status: ZoneStatus
+    note: str = Field(default="", max_length=200)
+
+
+class Shelter(BaseModel):
+    id: str
+    name: str
+    area: str
+    lat: float
+    lng: float
+    capacity: int
+    occupancy: int
+    facilities: list[str]
+
+
+class ShelterIn(BaseModel):
+    occupancy: int = Field(ge=0, le=100000)
+
+
+class Analytics(BaseModel):
+    total: int
+    open: int
+    resolved: int
+    resolution_rate: float          # % of incidents resolved
+    avg_time_to_assign_min: float | None   # report -> first team assigned
+    avg_time_to_resolve_min: float | None  # report -> resolved
+    critical_avg_time_to_assign_min: float | None
+    teams_total: int
+    teams_busy: int
+    utilisation: float              # % teams busy
+    rejections: int
+    by_hour: list[dict]             # [{hour:"06:00", reported, resolved}]
+    by_area: list[dict]             # [{area, total, critical, open}]
+    by_category: list[dict]         # [{category, label, total, avg_score}]
+    by_severity: list[dict]         # [{severity, total, open}]
+    by_status: list[dict]           # [{status, count}]
+    team_performance: list[dict]    # [{team_id, team_name, type_label, jobs, completed, rejected, avg_eta_min}]

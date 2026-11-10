@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-Category = Literal["fire", "road_accident", "medical", "flood", "building_collapse", "gas_leak", "electrical", "other"]
+Category = Literal["fire", "road_accident", "medical", "flood", "building_collapse", "gas_leak", "electrical", "landslide", "other"]
 Severity = Literal["Low", "Medium", "High", "Critical"]
 Status = Literal["Reported", "Pending", "In Progress", "Resolved"]
 Injuries = Literal["none", "minor", "serious"]
@@ -28,6 +28,9 @@ class ReportBase(BaseModel):
     vulnerable: list[Vulnerable] = []
     contact_name: str = Field(default="", max_length=100)
     contact_phone: str = Field(default="", max_length=20)
+    reported_severity: Literal["Low", "Medium", "High", "Critical"] | None = None  # citizen's own judgement (info only)
+    anonymous: bool = False
+    photo: str | None = Field(default=None, max_length=3_000_000)  # data URL, optional evidence
 
 
 class PreviewIn(ReportBase):
@@ -218,6 +221,8 @@ class TrackOut(BaseModel):
     updated_at: str
     timeline: list[TimelineEntry]
     teams: list[dict]  # [{team_name, team_type, status, eta_min}]
+    lat: float | None = None
+    lng: float | None = None
 
 
 ZoneStatus = Literal["critical", "evacuate", "watch", "safe"]

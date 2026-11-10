@@ -159,6 +159,8 @@ def preview(body: PreviewIn) -> dict:
 def create_incident(body: ReportIn) -> dict:
     report = body.model_dump()
     report["title"], report["description"] = report["title"].strip(), report["description"].strip()
+    if report.get("anonymous"):
+        report["contact_name"], report["contact_phone"] = "", ""
     return db.insert(lambda seq: build_incident(seq, report))
 
 
@@ -411,7 +413,8 @@ def track(inc_id: str) -> dict:
     inc = get_or_404(inc_id.strip())
     teams = [{"team_name": a["team_name"], "team_type": a["team_type"], "status": a["status"], "eta_min": a["eta_min"]}
              for a in inc.get("assignments", []) if a["status"] != "rejected"]
-    return {**{k: inc[k] for k in TrackOut.model_fields if k in inc}, "teams": teams}
+    return {**{k: inc[k] for k in TrackOut.model_fields if k in inc}, "teams": teams, "lat": inc.get("lat"),
+            "lng": inc.get("lng")}
 
 
 @app.get("/api/zones", response_model=list[Zone])

@@ -200,3 +200,10 @@ def test_analytics(client):
     assert a["total"] == 12 and a["resolved"] == 2 and a["teams_total"] == 13
     assert a["avg_time_to_assign_min"] is not None and len(a["by_hour"]) == 6
     assert sum(c["total"] for c in a["by_category"]) == 12
+
+
+def test_landslide_anonymous_reported_severity(client):
+    inc = client.post("/api/incidents", json=report(category="landslide", reported_severity="Critical", anonymous=True,
+                                                     contact_name="X", contact_phone="123", life_threat=True)).json()
+    assert inc["category"] == "landslide" and inc["contact_phone"] == "" and inc["reported_severity"] == "Critical"
+    assert client.get(f"/api/incidents/{inc['id']}/suggest").json()[0]["slot"] == "Search & rescue"

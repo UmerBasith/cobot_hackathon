@@ -8,11 +8,11 @@ from .geo import PLACE_POINTS, area_coords, nearest_place
 LEVELS = ["Low", "Medium", "High", "Critical"]
 CATEGORY_LABELS = {
     "fire": "Fire", "road_accident": "Road accident", "medical": "Medical emergency", "flood": "Flood",
-    "building_collapse": "Building collapse", "gas_leak": "Gas leak", "electrical": "Electrical hazard", "other": "Other",
+    "building_collapse": "Building collapse", "gas_leak": "Gas leak", "electrical": "Power outage / electrical", "landslide": "Landslide", "other": "Other",
 }
 HAZARD_POINTS = {"small": 5, "medium": 12, "large": 20, "spreading": 25}
 VULN_POINTS = {"children": 4, "elderly": 4, "patients": 5, "disabled": 5, "pregnant": 5}
-FAST_WORSENING = {"fire", "gas_leak", "flood", "electrical", "building_collapse"}
+FAST_WORSENING = {"fire", "gas_leak", "flood", "electrical", "building_collapse", "landslide"}
 
 
 def level_for(score: int) -> str:

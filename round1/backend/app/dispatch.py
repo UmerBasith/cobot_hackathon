@@ -54,6 +54,7 @@ def required_slots(inc: dict) -> list[dict]:
         "building_collapse": [{"slot": "Search & rescue", "types": ["ndrf", "fire"]}, fire, amb],
         "gas_leak": [fire, police],
         "electrical": [fire, police] + ([amb] if hurt else []),
+        "landslide": [{"slot": "Search & rescue", "types": ["ndrf", "fire"]}] + ([amb] if hurt or crit else []),
         "other": [police] + ([amb] if hurt else []),
     }[cat]
     if crit and cat == "fire":
@@ -125,7 +126,7 @@ def escalations(incidents: list[dict], teams: list[dict]) -> list[dict]:
     return sorted(out, key=lambda e: order[e["level"]])
 
 
-RELATED = [{"fire", "gas_leak", "electrical"}, {"flood", "building_collapse"}]
+RELATED = [{"fire", "gas_leak", "electrical"}, {"flood", "building_collapse", "landslide"}]
 
 
 def similar(inc: dict, incidents: list[dict]) -> list[dict]:
